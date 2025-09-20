@@ -7,7 +7,6 @@ import AlertSystem from './components/AlertSystem'
 import RouteOptimizer from './components/RouteOptimizer'
 import UserProfile from './components/UserProfile'
 import Login from './components/Login'
-import ChatBot from './components/ChatBot'
 import LexChatBot from './components/LexChatBot'
 import Footer from './components/Footer'
 
@@ -38,9 +37,7 @@ function App() {
                   <Route path="/routes" element={<RouteOptimizer />} />
                   <Route path="/profile" element={<UserProfile />} />
                 </Routes>
-                {/* Basic AI Assistant (left side) */}
-                <ChatBot />
-                {/* Amazon Lex Assistant (right side) */}
+                {/* Amazon Lex Assistant - Single chatbot only */}
                 <LexChatBot />
                 <Footer />
               </>
