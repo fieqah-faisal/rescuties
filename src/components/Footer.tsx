@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import { Cloud, Github, Twitter, Mail } from 'lucide-react'
 
 const Footer = () => {
@@ -34,9 +35,9 @@ const Footer = () => {
           <div>
             <h3 className="text-white font-semibold mb-4">Platform</h3>
             <ul className="space-y-2 text-gray-400">
-              <li><a href="#" className="hover:text-blue-400 transition-colors">Dashboard</a></li>
-              <li><a href="#" className="hover:text-blue-400 transition-colors">Alert System</a></li>
-              <li><a href="#" className="hover:text-blue-400 transition-colors">Route Optimizer</a></li>
+              <li><Link to="/" className="hover:text-blue-400 transition-colors">Dashboard</Link></li>
+              <li><Link to="/alerts" className="hover:text-blue-400 transition-colors">Alert System</Link></li>
+              <li><Link to="/routes" className="hover:text-blue-400 transition-colors">Route Optimizer</Link></li>
               <li><a href="#" className="hover:text-blue-400 transition-colors">AI Assistant</a></li>
             </ul>
           </div>

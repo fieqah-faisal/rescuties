@@ -50,7 +50,7 @@ const ChatBot = () => {
       {/* Chat Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full btn-primary flex items-center justify-center shadow-lg transition-all ${
+        className={`fixed bottom-6 left-6 z-50 w-14 h-14 rounded-full btn-secondary flex items-center justify-center shadow-lg transition-all ${
           isOpen ? 'scale-0' : 'scale-100 hover:scale-110'
         }`}
       >
@@ -59,7 +59,7 @@ const ChatBot = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-96 h-[500px] gradient-card rounded-xl shadow-2xl flex flex-col animate-fadeInUp">
+        <div className="fixed bottom-6 left-6 z-50 w-96 h-[500px] gradient-card rounded-xl shadow-2xl flex flex-col animate-fadeInUp">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <div className="flex items-center space-x-3">
@@ -71,7 +71,7 @@ const ChatBot = () => {
                 />
               </div>
               <div>
-                <h3 className="text-white font-semibold">AI Assistant</h3>
+                <h3 className="text-white font-semibold">Basic AI Assistant</h3>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   <span className="text-green-400 text-xs">Online</span>
