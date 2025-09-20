@@ -1,7 +1,16 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Activity, Users, MapPin, AlertTriangle, TrendingUp, Clock, Shield, Flame, Mountain, Waves, Zap } from 'lucide-react'
+import { googleMapsService } from '../utils/googleMaps'
+import GoogleMap from './GoogleMap'
 
 const Dashboard = () => {
+  const [mapMarkers, setMapMarkers] = useState<Array<{
+    position: { lat: number; lng: number };
+    title: string;
+    icon?: string;
+    infoWindow?: string;
+  }>>([])
+
   const getDisasterIcon = (type: string) => {
     switch (type.toLowerCase()) {
       case 'flood':
@@ -46,48 +55,94 @@ const Dashboard = () => {
     }
   }
 
+  const getDisasterMarkerIcon = (type: string, severity: string) => {
+    const baseUrl = 'https://maps.google.com/mapfiles/ms/icons/';
+    switch (severity.toLowerCase()) {
+      case 'high':
+        return baseUrl + 'red-dot.png';
+      case 'medium':
+        return baseUrl + 'yellow-dot.png';
+      case 'low':
+        return baseUrl + 'green-dot.png';
+      default:
+        return baseUrl + 'blue-dot.png';
+    }
+  }
+
+  // Real disaster locations in Malaysia with coordinates
   const liveAlerts = [
     {
       type: 'Flood',
-      location: 'Kuala Lumpur',
-      coordinates: '3.1390° N, 101.6869° E',
+      location: 'Kuala Lumpur City Center',
+      coordinates: { lat: 3.1478, lng: 101.6953 },
+      coordinatesText: '3.1478° N, 101.6953° E',
       timeDetected: '2 min ago',
       severity: 'High',
-      description: 'Flash flooding reported in city center'
+      description: 'Flash flooding reported in city center due to heavy rainfall'
     },
     {
       type: 'Landslide',
       location: 'Cameron Highlands',
-      coordinates: '4.4698° N, 101.3779° E',
+      coordinates: { lat: 4.4698, lng: 101.3779 },
+      coordinatesText: '4.4698° N, 101.3779° E',
       timeDetected: '15 min ago',
       severity: 'Medium',
-      description: 'Slope instability detected on main road'
+      description: 'Slope instability detected on main road to Tanah Rata'
     },
     {
       type: 'Wildfire',
-      location: 'Pahang National Park',
-      coordinates: '4.2105° N, 101.9758° E',
+      location: 'Taman Negara Pahang',
+      coordinates: { lat: 4.2105, lng: 101.9758 },
+      coordinatesText: '4.2105° N, 101.9758° E',
       timeDetected: '45 min ago',
       severity: 'High',
-      description: 'Forest fire spreading rapidly'
+      description: 'Forest fire spreading rapidly in national park area'
     },
     {
       type: 'Earthquake',
-      location: 'Sabah',
-      coordinates: '5.9804° N, 116.0735° E',
+      location: 'Kota Kinabalu, Sabah',
+      coordinates: { lat: 5.9804, lng: 116.0735 },
+      coordinatesText: '5.9804° N, 116.0735° E',
       timeDetected: '1 hour ago',
       severity: 'Low',
-      description: 'Minor tremor detected, magnitude 3.2'
+      description: 'Minor tremor detected, magnitude 3.2 near Mount Kinabalu'
     },
     {
       type: 'Flood',
-      location: 'Penang',
-      coordinates: '5.4164° N, 100.3327° E',
+      location: 'George Town, Penang',
+      coordinates: { lat: 5.4164, lng: 100.3327 },
+      coordinatesText: '5.4164° N, 100.3327° E',
       timeDetected: '2 hours ago',
       severity: 'Medium',
-      description: 'Rising water levels in coastal areas'
+      description: 'Rising water levels in coastal areas due to high tide'
     }
   ]
+
+  useEffect(() => {
+    // Initialize Google Maps service
+    googleMapsService.initialize();
+
+    // Create map markers for disaster locations
+    const markers = liveAlerts.map(alert => ({
+      position: alert.coordinates,
+      title: `${alert.type} - ${alert.location}`,
+      icon: getDisasterMarkerIcon(alert.type, alert.severity),
+      infoWindow: `
+        <div style="color: #000; font-family: Arial, sans-serif; max-width: 250px;">
+          <h3 style="margin: 0 0 8px 0; color: #1f2937;">${alert.type}</h3>
+          <p style="margin: 0 0 4px 0; font-weight: bold;">${alert.location}</p>
+          <p style="margin: 0 0 4px 0; font-size: 12px; color: #6b7280;">${alert.coordinatesText}</p>
+          <p style="margin: 0 0 8px 0; font-size: 14px;">${alert.description}</p>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: ${alert.severity === 'High' ? '#ef4444' : alert.severity === 'Medium' ? '#f59e0b' : '#10b981'}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${alert.severity}</span>
+            <span style="font-size: 12px; color: #6b7280;">${alert.timeDetected}</span>
+          </div>
+        </div>
+      `
+    }));
+
+    setMapMarkers(markers);
+  }, []);
 
   return (
     <section className="py-20 relative">
@@ -101,10 +156,10 @@ const Dashboard = () => {
                 className="w-full h-full object-contain"
               />
             </div>
-            <h2 className="text-4xl font-bold text-white">Live Disaster Alerts</h2>
+            <h2 className="text-4xl font-bold text-white">Live Disaster Monitoring</h2>
           </div>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            Monitor disaster situations across Malaysia with AI-powered analytics and real-time data visualization
+            Real-time disaster tracking across Malaysia with Google Maps integration and AI-powered analytics
           </p>
         </div>
 
@@ -115,7 +170,7 @@ const Dashboard = () => {
               <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center">
                 <AlertTriangle className="h-6 w-6 text-white" />
               </div>
-              <span className="text-2xl font-bold text-red-400">5</span>
+              <span className="text-2xl font-bold text-red-400">{liveAlerts.length}</span>
             </div>
             <h3 className="text-white font-semibold mb-2">Active Alerts</h3>
             <p className="text-gray-400 text-sm">Live disaster monitoring</p>
@@ -156,7 +211,7 @@ const Dashboard = () => {
         </div>
 
         {/* Main Dashboard Content */}
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-8 mb-8">
           {/* Live Disaster Alerts */}
           <div className="lg:col-span-2 gradient-card rounded-xl p-6">
             <div className="flex items-center justify-between mb-6">
@@ -185,7 +240,7 @@ const Dashboard = () => {
                           <div className="flex items-center space-x-2 text-gray-400 mb-2">
                             <MapPin className="h-4 w-4 text-blue-400" />
                             <span className="font-medium">{alert.location}</span>
-                            <span className="text-xs">({alert.coordinates})</span>
+                            <span className="text-xs">({alert.coordinatesText})</span>
                           </div>
                           <p className="text-gray-300 text-sm">{alert.description}</p>
                         </div>
@@ -203,7 +258,7 @@ const Dashboard = () => {
                         <span className="text-xs text-gray-400">Status: Active</span>
                       </div>
                       <button className="text-blue-400 hover:text-blue-300 text-xs font-medium">
-                        View Details →
+                        View on Map →
                       </button>
                     </div>
                   </div>
@@ -246,6 +301,36 @@ const Dashboard = () => {
                 </div>
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Live Disaster Map */}
+        <div className="gradient-card rounded-xl p-6">
+          <h3 className="text-xl font-semibold text-white mb-4">Live Disaster Map</h3>
+          <div className="bg-gray-800 rounded-lg h-96 overflow-hidden">
+            <GoogleMap
+              center={{ lat: 4.2105, lng: 108.9758 }} // Center of Malaysia
+              zoom={6}
+              markers={mapMarkers}
+              className="w-full h-full"
+            />
+          </div>
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <span className="text-gray-400">High Severity</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <span className="text-gray-400">Medium Severity</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <span className="text-gray-400">Low Severity</span>
+              </div>
+            </div>
+            <span className="text-gray-400">Real-time Google Maps integration</span>
           </div>
         </div>
       </div>
