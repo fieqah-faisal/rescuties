@@ -1,8 +1,81 @@
 import React, { useState } from 'react'
-import { Map, Navigation, Clock, Fuel, AlertTriangle, Route, MapPin, Zap } from 'lucide-react'
+import { Map, Navigation, Clock, Fuel, AlertTriangle, Route, MapPin, Zap, Search, X } from 'lucide-react'
 
 const RouteOptimizer = () => {
   const [selectedRoute, setSelectedRoute] = useState(0)
+  const [startingPoint, setStartingPoint] = useState('Fire Station Kuala Lumpur')
+  const [destination, setDestination] = useState('Flood Zone - KLCC Area')
+  const [startingSuggestions, setStartingSuggestions] = useState<string[]>([])
+  const [destinationSuggestions, setDestinationSuggestions] = useState<string[]>([])
+  const [showStartingSuggestions, setShowStartingSuggestions] = useState(false)
+  const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false)
+
+  // Mock location suggestions - will be replaced with Google Maps API
+  const mockLocations = [
+    'Fire Station Kuala Lumpur',
+    'Fire Station Petaling Jaya',
+    'Fire Station Shah Alam',
+    'KLCC Twin Towers',
+    'Bukit Bintang Plaza',
+    'KL Sentral Station',
+    'Pavilion KL',
+    'Mid Valley Megamall',
+    'Sunway Pyramid',
+    'IOI City Mall',
+    'Hospital Kuala Lumpur',
+    'Hospital Selayang',
+    'Universiti Malaya',
+    'UITM Shah Alam',
+    'Subang Airport',
+    'KLIA Terminal 1',
+    'Flood Zone - KLCC Area',
+    'Landslide Zone - Genting Highlands',
+    'Emergency Shelter - Titiwangsa',
+    'Evacuation Center - Ampang'
+  ]
+
+  const handleStartingPointChange = (value: string) => {
+    setStartingPoint(value)
+    if (value.length > 0) {
+      const filtered = mockLocations.filter(location => 
+        location.toLowerCase().includes(value.toLowerCase()) && location !== value
+      )
+      setStartingSuggestions(filtered.slice(0, 5))
+      setShowStartingSuggestions(true)
+    } else {
+      setShowStartingSuggestions(false)
+    }
+  }
+
+  const handleDestinationChange = (value: string) => {
+    setDestination(value)
+    if (value.length > 0) {
+      const filtered = mockLocations.filter(location => 
+        location.toLowerCase().includes(value.toLowerCase()) && location !== value
+      )
+      setDestinationSuggestions(filtered.slice(0, 5))
+      setShowDestinationSuggestions(true)
+    } else {
+      setShowDestinationSuggestions(false)
+    }
+  }
+
+  const selectStartingSuggestion = (suggestion: string) => {
+    setStartingPoint(suggestion)
+    setShowStartingSuggestions(false)
+  }
+
+  const selectDestinationSuggestion = (suggestion: string) => {
+    setDestination(suggestion)
+    setShowDestinationSuggestions(false)
+  }
+
+  const handleCalculateRoutes = () => {
+    // Navigate to maps page - will be implemented when maps page is created
+    console.log('Navigating to maps with:', { startingPoint, destination })
+    // For now, we'll show an alert
+    alert(`Calculating routes from "${startingPoint}" to "${destination}". Maps integration coming soon!`)
+  }
 
   const routes = [
     {
@@ -63,11 +136,12 @@ const RouteOptimizer = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <div className="flex items-center justify-center space-x-3 mb-6">
-            <div className="w-12 h-12 rounded-lg overflow-hidden bg-white p-2">
+            <div className="w-12 h-12 rounded-lg overflow-hidden p-2">
               <img 
-                src="https://cdn.chatandbuild.com/users/688b11cfde83ff4065553da3/cloud-cuties-1758351688316-474152956-1758351688316-440085577.png" 
+                src="https://cdn.chatandbuild.com/users/688b11cfde83ff4065553da3/cloud-cuties-1-1758358732068-611910688-1758358732068-439692214.png" 
                 alt="Cloud Cuties Logo" 
                 className="w-full h-full object-contain"
+                style={{ backgroundColor: 'transparent' }}
               />
             </div>
             <h2 className="text-4xl font-bold text-white">Smart Route Optimizer</h2>
@@ -83,23 +157,98 @@ const RouteOptimizer = () => {
             <div>
               <h3 className="text-lg font-semibold text-white mb-4">Route Planning</h3>
               <div className="space-y-4">
-                <div>
+                <div className="relative">
                   <label className="block text-gray-400 text-sm mb-2">Starting Point</label>
-                  <div className="flex items-center space-x-2 p-3 bg-gray-800 rounded-lg">
-                    <MapPin className="h-4 w-4 text-blue-400" />
-                    <span className="text-white">Fire Station Kuala Lumpur</span>
+                  <div className="relative">
+                    <div className="flex items-center space-x-2 p-3 bg-gray-800 rounded-lg border border-gray-700 focus-within:border-blue-500 transition-colors">
+                      <MapPin className="h-4 w-4 text-blue-400 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={startingPoint}
+                        onChange={(e) => handleStartingPointChange(e.target.value)}
+                        onFocus={() => startingPoint.length > 0 && setShowStartingSuggestions(true)}
+                        className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none"
+                        placeholder="Enter starting location..."
+                      />
+                      {startingPoint && (
+                        <button
+                          onClick={() => {
+                            setStartingPoint('')
+                            setShowStartingSuggestions(false)
+                          }}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {showStartingSuggestions && startingSuggestions.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                        {startingSuggestions.map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => selectStartingSuggestion(suggestion)}
+                            className="w-full text-left px-4 py-3 text-white hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                          >
+                            <Search className="h-4 w-4 text-gray-400" />
+                            <span>{suggestion}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div>
+
+                <div className="relative">
                   <label className="block text-gray-400 text-sm mb-2">Destination</label>
-                  <div className="flex items-center space-x-2 p-3 bg-gray-800 rounded-lg">
-                    <AlertTriangle className="h-4 w-4 text-red-400" />
-                    <span className="text-white">Flood Zone - KLCC Area</span>
+                  <div className="relative">
+                    <div className="flex items-center space-x-2 p-3 bg-gray-800 rounded-lg border border-gray-700 focus-within:border-blue-500 transition-colors">
+                      <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={destination}
+                        onChange={(e) => handleDestinationChange(e.target.value)}
+                        onFocus={() => destination.length > 0 && setShowDestinationSuggestions(true)}
+                        className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none"
+                        placeholder="Enter destination..."
+                      />
+                      {destination && (
+                        <button
+                          onClick={() => {
+                            setDestination('')
+                            setShowDestinationSuggestions(false)
+                          }}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {showDestinationSuggestions && destinationSuggestions.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                        {destinationSuggestions.map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => selectDestinationSuggestion(suggestion)}
+                            className="w-full text-left px-4 py-3 text-white hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                          >
+                            <Search className="h-4 w-4 text-gray-400" />
+                            <span>{suggestion}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <button className="btn-primary w-full py-3 rounded-lg">
-                  <Route className="h-4 w-4 mr-2" />
-                  Calculate Optimal Routes
+
+                <button 
+                  onClick={handleCalculateRoutes}
+                  className="btn-primary w-full py-3 rounded-lg flex items-center justify-center space-x-2 hover:scale-105 transition-transform"
+                >
+                  <Route className="h-5 w-5" />
+                  <span>Calculate Optimal Routes</span>
                 </button>
               </div>
             </div>

@@ -25,7 +25,6 @@ function App() {
               <>
                 <Hero />
                 <Dashboard />
-                <AlertSystem />
                 <RouteOptimizer />
               </>
             } />
