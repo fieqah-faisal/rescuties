@@ -45,9 +45,9 @@ const Home = () => {
           <div className="text-center mb-16">
             <div className="flex items-center justify-center mb-8">
               <img 
-                src="https://cdn.chatandbuild.com/users/688b11cfde83ff4065553da3/cloud-cuties-1758351688316-474152956-1758351688316-440085577-white.png" 
-                alt="Rescuties Logo" 
-                className="h-20 w-20 mr-4"
+                src="https://cdn.chatandbuild.com/users/688b11cfde83ff4065553da3/cloud-cuties-1-1758446758166-994556280-1758446758163-972044035.png" 
+                alt="Cloud Cuties Logo" 
+                className="h-20 w-20 mr-4 object-contain"
               />
               <h1 className="text-6xl font-bold brand-font bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
                 Rescuties
@@ -184,9 +184,9 @@ const Home = () => {
             <div>
               <div className="flex items-center mb-4">
                 <img 
-                  src="https://cdn.chatandbuild.com/users/688b11cfde83ff4065553da3/cloud-cuties-1758351688316-474152956-1758351688316-440085577-white.png" 
-                  alt="Rescuties Logo" 
-                  className="h-8 w-8 mr-2"
+                  src="https://cdn.chatandbuild.com/users/688b11cfde83ff4065553da3/cloud-cuties-1-1758446758166-994556280-1758446758163-972044035.png" 
+                  alt="Cloud Cuties Logo" 
+                  className="h-8 w-8 mr-2 object-contain"
                 />
                 <span className="text-xl font-bold brand-font bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">Rescuties</span>
               </div>
