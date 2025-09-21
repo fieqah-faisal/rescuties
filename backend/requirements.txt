@@ -1,0 +1,4 @@
+unicodecsv==0.14.1
+rich_argparse==1.1.0
+boto3==1.28.12
+tweepy==4.14.0
