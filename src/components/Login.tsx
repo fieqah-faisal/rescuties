@@ -1,36 +1,59 @@
 import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
+import { login as authLogin } from '../lib/auth'
+import { useAuth } from '../contexts/AuthContext'
 
 const Login = () => {
+  const navigate = useNavigate()
+  const { login } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError('')
+    setSuccess('')
     
-    // Placeholder for Amazon Cognito authentication
-    console.log('Login attempt with:', { email, password })
-    console.log('TODO: Integrate with Amazon Cognito Auth')
-    
-    // Simulate loading state
-    setTimeout(() => {
+    try {
+      const user = await authLogin(email, password)
+      login(user)
+      setSuccess('Login successful! Redirecting...')
+      
+      setTimeout(() => {
+        navigate('/')
+      }, 1500)
+    } catch (error: any) {
+      console.error('Login error:', error)
+      
+      // Handle specific Cognito errors
+      if (error.code === 'UserNotConfirmedException') {
+        setError('Please verify your email address before signing in.')
+      } else if (error.code === 'NotAuthorizedException') {
+        setError('Invalid email or password. Please try again.')
+      } else if (error.code === 'UserNotFoundException') {
+        setError('No account found with this email address.')
+      } else if (error.code === 'TooManyRequestsException') {
+        setError('Too many failed attempts. Please try again later.')
+      } else {
+        setError(error.message || 'An error occurred during login. Please try again.')
+      }
+    } finally {
       setIsLoading(false)
-      // TODO: Handle Cognito authentication response
-      // TODO: Redirect to dashboard on success
-      // TODO: Show error message on failure
-    }, 2000)
+    }
   }
 
   const handleGoogleLogin = () => {
-    console.log('TODO: Implement Google OAuth with Cognito')
+    setError('Google OAuth integration coming soon!')
   }
 
   const handleFacebookLogin = () => {
-    console.log('TODO: Implement Facebook OAuth with Cognito')
+    setError('Facebook OAuth integration coming soon!')
   }
 
   return (
@@ -61,13 +84,25 @@ const Login = () => {
             </p>
           </div>
 
-          {/* Cognito Integration Notice */}
-          <div className="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <div className="flex items-center space-x-2 text-blue-400 text-sm">
-              <AlertCircle className="h-4 w-4" />
-              <span>Amazon Cognito integration pending</span>
+          {/* Success Message */}
+          {success && (
+            <div className="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="flex items-center space-x-2 text-green-400 text-sm">
+                <CheckCircle className="h-4 w-4" />
+                <span>{success}</span>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center space-x-2 text-red-400 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                <span>{error}</span>
+              </div>
+            </div>
+          )}
 
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-6">
@@ -86,6 +121,7 @@ const Login = () => {
                   className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                   placeholder="Enter your email"
                   required
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -105,11 +141,13 @@ const Login = () => {
                   className="w-full pl-10 pr-12 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                   placeholder="Enter your password"
                   required
+                  disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+                  disabled={isLoading}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -122,6 +160,7 @@ const Login = () => {
                 <input
                   type="checkbox"
                   className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                  disabled={isLoading}
                 />
                 <span className="ml-2 text-sm text-gray-300">Remember me</span>
               </label>
@@ -158,7 +197,8 @@ const Login = () => {
           <div className="space-y-3">
             <button
               onClick={handleGoogleLogin}
-              className="w-full btn-secondary text-white font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2"
+              disabled={isLoading}
+              className="w-full btn-secondary text-white font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -171,7 +211,8 @@ const Login = () => {
 
             <button
               onClick={handleFacebookLogin}
-              className="w-full btn-secondary text-white font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2"
+              disabled={isLoading}
+              className="w-full btn-secondary text-white font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>

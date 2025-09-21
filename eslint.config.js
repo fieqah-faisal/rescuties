@@ -23,11 +23,9 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
-      // Turn off strict TypeScript rules
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',
-      '@typescript-eslint/no-non-null-assertion': 'off',
     },
   },
 )

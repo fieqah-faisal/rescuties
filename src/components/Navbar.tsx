@@ -1,19 +1,25 @@
 import React, { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, X, AlertTriangle, Map, Home, User, LogOut } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { logout, user, isLoggedIn } = useAuth()
 
   const isActive = (path: string) => {
     return location.pathname === path
   }
 
-  const handleLogout = () => {
-    // Placeholder for logout functionality
-    console.log('Logout clicked - implement authentication logout here')
-    // Future implementation: Clear auth tokens, redirect to login, etc.
+  const handleLogout = async () => {
+    try {
+      await logout()
+      navigate('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
   }
 
   const NavLink = ({ to, children, icon: Icon }: { to: string, children: React.ReactNode, icon: any }) => (
@@ -88,6 +94,45 @@ const Navbar = () => {
     </button>
   )
 
+  // Show login button if not authenticated
+  if (!isLoggedIn) {
+    return (
+      <nav className="fixed top-0 left-0 right-0 z-50 transparent-nav">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link to="/" className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-lg overflow-hidden">
+                <img 
+                  src="https://cdn.chatandbuild.com/users/688b11cfde83ff4065553da3/cloud-cuties-1-1758355206652-870178326-1758355206651-969070550.png" 
+                  alt="Rescuties Logo" 
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <span className="text-2xl brand-font bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+                Rescuties
+              </span>
+            </Link>
+
+            <div className="flex items-center space-x-4">
+              <Link 
+                to="/login" 
+                className="btn-primary px-6 py-2 rounded-lg text-white font-medium transition-all"
+              >
+                Sign In
+              </Link>
+              <Link 
+                to="/signup" 
+                className="btn-secondary px-6 py-2 rounded-lg text-white font-medium transition-all"
+              >
+                Sign Up
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+    )
+  }
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 transparent-nav">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -111,6 +156,14 @@ const Navbar = () => {
             <NavLink to="/alerts" icon={AlertTriangle}>Alerts</NavLink>
             <NavLink to="/routes" icon={Map}>Routes</NavLink>
             <NavLink to="/profile" icon={User}>Profile</NavLink>
+            
+            {/* User Info */}
+            {user && (
+              <div className="flex items-center space-x-3 text-gray-300">
+                <span className="text-sm">Welcome, {user.username}</span>
+              </div>
+            )}
+            
             <NavButton onClick={handleLogout} icon={LogOut}>Logout</NavButton>
           </div>
 
@@ -131,6 +184,14 @@ const Navbar = () => {
               <MobileNavLink to="/alerts" icon={AlertTriangle}>Alerts</MobileNavLink>
               <MobileNavLink to="/routes" icon={Map}>Routes</MobileNavLink>
               <MobileNavLink to="/profile" icon={User}>Profile</MobileNavLink>
+              
+              {/* User Info Mobile */}
+              {user && (
+                <div className="py-3 text-gray-300 border-t border-gray-600 mt-4 pt-4">
+                  <span className="text-sm">Welcome, {user.username}</span>
+                </div>
+              )}
+              
               <MobileNavButton onClick={handleLogout} icon={LogOut}>Logout</MobileNavButton>
             </div>
           </div>
