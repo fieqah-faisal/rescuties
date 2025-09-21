@@ -33,18 +33,41 @@ const SignUp = () => {
       setError('Username is required')
       return false
     }
+    
+    // Check if username contains @ symbol (email format)
+    if (formData.username.includes('@')) {
+      setError('Username cannot be an email address. Please use a unique username.')
+      return false
+    }
+    
+    // Username should be at least 3 characters
+    if (formData.username.length < 3) {
+      setError('Username must be at least 3 characters long')
+      return false
+    }
+    
     if (!formData.email.trim()) {
       setError('Email is required')
       return false
     }
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address')
+      return false
+    }
+    
     if (formData.password.length < 8) {
       setError('Password must be at least 8 characters long')
       return false
     }
+    
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match')
       return false
     }
+    
     return true
   }
 
@@ -60,6 +83,7 @@ const SignUp = () => {
     }
 
     try {
+      // Pass username and email separately - username cannot be email format
       const result = await register(formData.username, formData.password, formData.email)
       if (result.nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
         setSuccess('Account created successfully! Please check your email for verification code.')
@@ -70,11 +94,19 @@ const SignUp = () => {
       
       // Handle specific Cognito errors
       if (error.name === 'UsernameExistsException') {
-        setError('An account with this username already exists.')
+        setError('An account with this username already exists. Please choose a different username.')
       } else if (error.name === 'InvalidPasswordException') {
-        setError('Password does not meet requirements. Please use at least 8 characters.')
+        setError('Password does not meet requirements. Please use at least 8 characters with uppercase, lowercase, numbers, and special characters.')
       } else if (error.name === 'InvalidParameterException') {
-        setError('Invalid email format. Please enter a valid email address.')
+        if (error.message.includes('email')) {
+          setError('Invalid email format. Please enter a valid email address.')
+        } else if (error.message.includes('username')) {
+          setError('Invalid username format. Username cannot be an email address.')
+        } else {
+          setError('Invalid input. Please check your information and try again.')
+        }
+      } else if (error.name === 'AliasExistsException') {
+        setError('An account with this email already exists. Please use a different email or try signing in.')
       } else {
         setError(error.message || 'An error occurred during registration. Please try again.')
       }
@@ -105,6 +137,8 @@ const SignUp = () => {
         setError('Invalid verification code. Please try again.')
       } else if (error.name === 'ExpiredCodeException') {
         setError('Verification code has expired. Please request a new one.')
+      } else if (error.name === 'NotAuthorizedException') {
+        setError('User cannot be confirmed. Please contact support.')
       } else {
         setError(error.message || 'An error occurred during verification. Please try again.')
       }
@@ -305,11 +339,14 @@ const SignUp = () => {
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  placeholder="Choose a username"
+                  placeholder="Choose a unique username"
                   required
                   disabled={isLoading}
                 />
               </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Must be at least 3 characters, cannot be an email address
+              </p>
             </div>
 
             {/* Email Field */}
@@ -325,11 +362,14 @@ const SignUp = () => {
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  placeholder="Enter your email"
+                  placeholder="Enter your email address"
                   required
                   disabled={isLoading}
                 />
               </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Used for account verification and notifications
+              </p>
             </div>
 
             {/* Password Field */}
@@ -345,7 +385,7 @@ const SignUp = () => {
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
                   className="w-full pl-10 pr-12 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  placeholder="Create a password"
+                  placeholder="Create a strong password"
                   required
                   disabled={isLoading}
                 />
@@ -359,7 +399,7 @@ const SignUp = () => {
                 </button>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Must be at least 8 characters long
+                At least 8 characters with uppercase, lowercase, numbers, and special characters
               </p>
             </div>
 

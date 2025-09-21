@@ -25,15 +25,16 @@ export interface SignUpResult {
   }
 }
 
-// Register (Sign Up)
+// Register (Sign Up) - FIXED: Username and email are now separate
 export async function register(username: string, password: string, email: string): Promise<SignUpResult> {
   try {
+    // CRITICAL: Username must NOT be email format, email goes in attributes
     const { isSignUpComplete, userId, nextStep } = await signUp({
-      username,
-      password,
+      username: username, // Non-email username (e.g., "john123", "user456")
+      password: password,
       options: {
         userAttributes: {
-          email,
+          email: email, // Email goes here in attributes
         },
       },
     })
@@ -49,7 +50,7 @@ export async function register(username: string, password: string, email: string
 export async function confirmSignUpCode(username: string, code: string): Promise<any> {
   try {
     const { isSignUpComplete, nextStep } = await confirmSignUp({
-      username,
+      username, // Use the same username (not email) that was used during signup
       confirmationCode: code,
     })
     console.log('Confirmation success:', { isSignUpComplete, nextStep })
@@ -64,7 +65,7 @@ export async function confirmSignUpCode(username: string, code: string): Promise
 export async function resendConfirmationCode(username: string): Promise<any> {
   try {
     const { destination, deliveryMedium } = await resendSignUpCode({
-      username,
+      username, // Use the same username (not email) that was used during signup
     })
     console.log('Confirmation code resent:', { destination, deliveryMedium })
     return { destination, deliveryMedium }
@@ -74,11 +75,11 @@ export async function resendConfirmationCode(username: string): Promise<any> {
   }
 }
 
-// Login (Sign In)
+// Login (Sign In) - Can use either username or email depending on Cognito config
 export async function login(username: string, password: string): Promise<AuthUser> {
   try {
     const { isSignedIn, nextStep } = await signIn({
-      username,
+      username, // This can be username or email depending on your Cognito setup
       password,
     })
     
