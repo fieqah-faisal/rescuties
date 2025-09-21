@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle, User } from 'lucide-react'
-import { register, confirmSignUpCode, resendConfirmationCode } from '../lib/auth'
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle, User, Phone } from 'lucide-react'
+import { register, confirmSignUpCode, resendConfirmationCode, registerMinimal } from '../lib/auth'
 
 const SignUp = () => {
   const navigate = useNavigate()
@@ -10,6 +10,8 @@ const SignUp = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
+    fullName: '',
+    phoneNumber: '',
     password: '',
     confirmPassword: ''
   })
@@ -20,6 +22,7 @@ const SignUp = () => {
   const [confirmationCode, setConfirmationCode] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
   const [isResending, setIsResending] = useState(false)
+  const [debugMode, setDebugMode] = useState(false)
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -29,7 +32,7 @@ const SignUp = () => {
   }
 
   const validateForm = () => {
-    console.log('=== FORM VALIDATION ===')
+    console.log('=== AMAZON Q STEP 2: FORM VALIDATION ===')
     console.log('Form data:', formData)
     
     if (!formData.username.trim()) {
@@ -37,7 +40,7 @@ const SignUp = () => {
       return false
     }
     
-    // Check if username contains @ symbol (email format)
+    // Amazon Q: Check if username contains @ symbol (email format)
     if (formData.username.includes('@')) {
       setError('Username cannot be an email address. Please use a unique username.')
       return false
@@ -68,6 +71,29 @@ const SignUp = () => {
       return false
     }
     
+    if (!formData.fullName.trim()) {
+      setError('Full name is required')
+      return false
+    }
+    
+    if (!formData.phoneNumber.trim()) {
+      setError('Phone number is required')
+      return false
+    }
+    
+    // Amazon Q: Phone validation (must include country code)
+    if (!formData.phoneNumber.startsWith('+')) {
+      setError('Phone number must include country code (e.g., +60123456789)')
+      return false
+    }
+    
+    // Basic phone validation (Malaysian format)
+    const phoneRegex = /^\+60\d{8,10}$/
+    if (!phoneRegex.test(formData.phoneNumber)) {
+      setError('Phone number must be in Malaysian format: +60123456789')
+      return false
+    }
+    
     if (formData.password.length < 8) {
       setError('Password must be at least 8 characters long')
       return false
@@ -89,8 +115,42 @@ const SignUp = () => {
       return false
     }
     
-    console.log('Form validation passed')
+    console.log('✅ Form validation passed')
     return true
+  }
+
+  // Amazon Q Step 3: Test with minimal attributes
+  const handleMinimalSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError('')
+    setSuccess('')
+    
+    console.log('=== AMAZON Q STEP 3: TESTING WITH MINIMAL ATTRIBUTES ===')
+    
+    if (!formData.username.trim() || !formData.email.trim() || !formData.password.trim()) {
+      setError('Username, email, and password are required for minimal test')
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const result = await registerMinimal(
+        formData.username, 
+        formData.password, 
+        formData.email
+      )
+      
+      if (result.nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
+        setSuccess('✅ Minimal signup successful! Email verification required.')
+        setShowConfirmation(true)
+      }
+    } catch (error: any) {
+      console.error('❌ Minimal signup failed:', error)
+      setError(`Minimal signup failed: ${error.message}`)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -99,8 +159,7 @@ const SignUp = () => {
     setError('')
     setSuccess('')
     
-    console.log('=== SIGNUP ATTEMPT ===')
-    console.log('Starting signup process...')
+    console.log('=== AMAZON Q DEBUGGING - FULL SIGNUP ATTEMPT ===')
     
     if (!validateForm()) {
       setIsLoading(false)
@@ -108,37 +167,24 @@ const SignUp = () => {
     }
 
     try {
-      console.log('Calling register function...')
-      const result = await register(formData.username, formData.password, formData.email)
-      console.log('Register result:', result)
+      const result = await register(
+        formData.username, 
+        formData.password, 
+        formData.email,
+        formData.fullName,
+        formData.phoneNumber
+      )
       
       if (result.nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
-        setSuccess('Account created successfully! Please check your email for verification code.')
+        setSuccess('✅ Account created successfully! Please check your email for verification code.')
         setShowConfirmation(true)
       } else {
         console.log('Unexpected signup step:', result.nextStep)
         setError('Unexpected response from server. Please try again.')
       }
     } catch (error: any) {
-      console.error('=== SIGNUP ERROR IN COMPONENT ===')
-      console.error('Error object:', error)
-      console.error('Error name:', error.name)
-      console.error('Error message:', error.message)
-      
-      // Handle specific Cognito errors with better messages
-      if (error.name === 'UsernameExistsException') {
-        setError('An account with this username already exists. Please choose a different username.')
-      } else if (error.name === 'InvalidPasswordException') {
-        setError('Password does not meet requirements. Please use at least 8 characters with uppercase, lowercase, numbers, and special characters.')
-      } else if (error.name === 'InvalidParameterException') {
-        setError(`Invalid input: ${error.message}`)
-      } else if (error.name === 'AliasExistsException') {
-        setError('An account with this email already exists. Please use a different email or try signing in.')
-      } else if (error.message) {
-        setError(error.message)
-      } else {
-        setError('An unexpected error occurred during registration. Please check the console for details.')
-      }
+      console.error('❌ Full signup failed:', error)
+      setError(error.message || 'Registration failed. Check console for details.')
     } finally {
       setIsLoading(false)
     }
@@ -333,6 +379,16 @@ const SignUp = () => {
             </p>
           </div>
 
+          {/* Amazon Q Debug Toggle */}
+          <div className="mb-6 text-center">
+            <button
+              onClick={() => setDebugMode(!debugMode)}
+              className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
+            >
+              {debugMode ? 'Hide' : 'Show'} Amazon Q Debug Options
+            </button>
+          </div>
+
           {/* Success Message */}
           {success && (
             <div className="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
@@ -353,16 +409,24 @@ const SignUp = () => {
             </div>
           )}
 
-          {/* Debug Info */}
-          <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <div className="text-blue-400 text-xs">
-              <p><strong>Debug Info:</strong></p>
-              <p>Username: {formData.username || 'empty'}</p>
-              <p>Email: {formData.email || 'empty'}</p>
-              <p>Password length: {formData.password.length}</p>
-              <p>Check browser console for detailed logs</p>
+          {/* Amazon Q Debug Panel */}
+          {debugMode && (
+            <div className="mb-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <h3 className="text-yellow-400 font-medium mb-3">Amazon Q Debug Options</h3>
+              <div className="space-y-2">
+                <button
+                  onClick={handleMinimalSignUp}
+                  disabled={isLoading}
+                  className="w-full text-sm bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 py-2 px-3 rounded transition-colors disabled:opacity-50"
+                >
+                  Step 3: Test Minimal Signup (Email Only)
+                </button>
+                <p className="text-xs text-gray-400">
+                  Tests registration with only email attribute to isolate permission issues
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Sign Up Form */}
           <form onSubmit={handleSignUp} className="space-y-6">
@@ -389,6 +453,29 @@ const SignUp = () => {
               </p>
             </div>
 
+            {/* Full Name Field */}
+            <div>
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-300 mb-2">
+                Full Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  id="fullName"
+                  type="text"
+                  value={formData.fullName}
+                  onChange={(e) => handleInputChange('fullName', e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  placeholder="Ahmad Rescuer"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Maps to 'name' attribute in Cognito
+              </p>
+            </div>
+
             {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
@@ -409,6 +496,29 @@ const SignUp = () => {
               </div>
               <p className="text-xs text-gray-400 mt-1">
                 Used for account verification and notifications
+              </p>
+            </div>
+
+            {/* Phone Number Field */}
+            <div>
+              <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-300 mb-2">
+                Phone Number
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  id="phoneNumber"
+                  type="tel"
+                  value={formData.phoneNumber}
+                  onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  placeholder="+60123456789"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Must start with + (maps to 'phone_number' in Cognito)
               </p>
             </div>
 
@@ -502,7 +612,7 @@ const SignUp = () => {
         {/* AWS Integration Note */}
         <div className="mt-6 text-center">
           <p className="text-gray-500 text-xs">
-            Secured by Amazon Cognito • AWS Amplify Ready
+            Secured by Amazon Cognito • Following Amazon Q Debugging Process
           </p>
         </div>
       </div>

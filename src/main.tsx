@@ -4,8 +4,15 @@ import App from './App.tsx'
 import './index.css'
 import { checkAmplifyConfig } from './lib/amplify-config'
 
-// Check Amplify configuration on startup
-checkAmplifyConfig()
+// Force check Amplify configuration on startup
+console.log('🚀 Starting application...')
+const configSuccess = checkAmplifyConfig()
+
+if (!configSuccess) {
+  console.error('❌ Amplify configuration failed! Check your .env file.')
+} else {
+  console.log('✅ Amplify configuration successful!')
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

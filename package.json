@@ -15,7 +15,8 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.20.1",
     "@types/google.maps": "^3.54.10",
-    "aws-amplify": "^6.0.7"
+    "aws-amplify": "^6.0.7",
+    "@aws-sdk/client-lex-runtime-v2": "^3.490.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
