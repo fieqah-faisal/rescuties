@@ -31,38 +31,59 @@ export interface S3ConnectionStatus {
 }
 
 class S3Service {
-  private s3Client: S3Client
+  private s3Client: S3Client | null = null
   private bucketName: string
+  private region: string
+  private accessKeyId: string
+  private secretAccessKey: string
 
   constructor() {
-    const region = import.meta.env.VITE_AWS_REGION || 'us-east-1'
-    const accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID || ''
-    const secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || ''
+    this.region = import.meta.env.VITE_AWS_REGION || 'us-east-1'
+    this.accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID || ''
+    this.secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || ''
+    this.bucketName = import.meta.env.VITE_S3_BUCKET_NAME || 'cloud-cuties-tweet-bucket'
     
     console.log('🔧 S3Service Configuration:')
-    console.log('  Region:', region)
-    console.log('  Access Key:', accessKeyId ? `${accessKeyId.substring(0, 8)}...` : 'NOT SET')
-    console.log('  Secret Key:', secretAccessKey ? 'SET' : 'NOT SET')
-    
-    this.s3Client = new S3Client({
-      region,
-      credentials: {
-        accessKeyId,
-        secretAccessKey
-      },
-      // Enhanced configuration for browser requests
-      requestHandler: {
-        requestTimeout: 15000,
-        httpsAgent: undefined
-      },
-      // Force path-style URLs for better compatibility
-      forcePathStyle: true,
-      // Add custom endpoint if needed (uncomment if using custom S3 endpoint)
-      // endpoint: 'https://s3.amazonaws.com'
-    })
-    
-    this.bucketName = import.meta.env.VITE_S3_BUCKET_NAME || 'cloud-cuties-tweet-bucket'
+    console.log('  Environment:', import.meta.env.MODE)
+    console.log('  Region:', this.region)
+    console.log('  Access Key:', this.accessKeyId ? `${this.accessKeyId.substring(0, 8)}...` : 'NOT SET')
+    console.log('  Secret Key:', this.secretAccessKey ? 'SET' : 'NOT SET')
     console.log('  Bucket Name:', this.bucketName)
+    
+    this.initializeClient()
+  }
+
+  private initializeClient() {
+    if (!this.accessKeyId || !this.secretAccessKey) {
+      console.error('❌ S3 credentials missing from environment variables')
+      return
+    }
+
+    try {
+      this.s3Client = new S3Client({
+        region: this.region,
+        credentials: {
+          accessKeyId: this.accessKeyId,
+          secretAccessKey: this.secretAccessKey
+        },
+        // Enhanced configuration for production
+        maxAttempts: 3,
+        retryMode: 'adaptive',
+        requestHandler: {
+          requestTimeout: 30000,
+          connectionTimeout: 10000
+        },
+        // Force path-style URLs for better compatibility
+        forcePathStyle: false, // Use virtual-hosted-style URLs for better compatibility
+        // Ensure HTTPS
+        endpoint: `https://s3.${this.region}.amazonaws.com`
+      })
+      
+      console.log('✅ S3 client initialized successfully')
+    } catch (error) {
+      console.error('❌ Failed to initialize S3 client:', error)
+      this.s3Client = null
+    }
   }
 
   async testConnection(): Promise<S3ConnectionStatus> {
@@ -71,22 +92,30 @@ class S3Service {
       bucketExists: false,
       hasReadPermission: false,
       bucketName: this.bucketName,
-      region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
+      region: this.region,
       corsIssue: false,
       credentialsValid: false
     }
 
-    // First, validate credentials are present
-    if (!import.meta.env.VITE_AWS_ACCESS_KEY_ID || !import.meta.env.VITE_AWS_SECRET_ACCESS_KEY) {
-      status.error = 'AWS credentials missing from .env file. Please add VITE_AWS_ACCESS_KEY_ID and VITE_AWS_SECRET_ACCESS_KEY'
-      console.error('❌ Missing AWS credentials in .env file')
+    // Check if client was initialized
+    if (!this.s3Client) {
+      status.error = 'S3 client not initialized - check AWS credentials in environment variables'
+      console.error('❌ S3 client not initialized')
+      return status
+    }
+
+    // Validate credentials are present
+    if (!this.accessKeyId || !this.secretAccessKey) {
+      status.error = 'AWS credentials missing from environment variables. Check VITE_AWS_ACCESS_KEY_ID and VITE_AWS_SECRET_ACCESS_KEY in Amplify console'
+      console.error('❌ Missing AWS credentials in environment variables')
       return status
     }
 
     try {
       console.log(`🔍 Testing S3 connection to bucket: ${this.bucketName}`)
-      console.log(`📍 Region: ${status.region}`)
-      console.log(`🔑 Access Key: ${import.meta.env.VITE_AWS_ACCESS_KEY_ID?.substring(0, 8)}...`)
+      console.log(`📍 Region: ${this.region}`)
+      console.log(`🔑 Access Key: ${this.accessKeyId.substring(0, 8)}...`)
+      console.log(`🌐 Environment: ${import.meta.env.MODE}`)
       
       // Test 1: Check if bucket exists and we have access
       const headCommand = new HeadBucketCommand({
@@ -125,27 +154,34 @@ class S3Service {
 
     } catch (error: any) {
       console.error('❌ S3 Connection Error:', error)
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        statusCode: error.$metadata?.httpStatusCode
+      })
       
-      // Enhanced error analysis
+      // Enhanced error analysis for production deployment
       if (error.message?.includes('Failed to fetch') || error.name === 'TypeError' || error.message?.includes('CORS')) {
         status.corsIssue = true
-        status.error = 'CORS issue: S3 bucket needs CORS configuration for browser access. Please configure CORS policy on your S3 bucket.'
-        console.error('🚫 CORS Error: The S3 bucket needs CORS policy configured')
-        console.error('💡 Solution: Add CORS policy to allow browser requests from your domain')
+        status.error = 'CORS issue: S3 bucket needs CORS configuration for browser access from Amplify domain. Update CORS policy to include your Amplify domain.'
+        console.error('🚫 CORS Error: The S3 bucket needs CORS policy configured for Amplify domain')
       } else if (error.name === 'NoSuchBucket') {
-        status.error = `Bucket '${this.bucketName}' does not exist. Please verify the bucket name.`
-      } else if (error.name === 'AccessDenied' || error.name === 'Forbidden') {
-        status.error = 'Access denied - check IAM permissions for S3. The user needs s3:GetObject and s3:ListBucket permissions.'
-      } else if (error.name === 'InvalidAccessKeyId') {
-        status.error = 'Invalid AWS Access Key ID. Please check your credentials.'
+        status.error = `Bucket '${this.bucketName}' does not exist in region '${this.region}'. Verify bucket name and region.`
+      } else if (error.name === 'AccessDenied' || error.name === 'Forbidden' || error.$metadata?.httpStatusCode === 403) {
+        status.error = 'Access denied - IAM user needs s3:GetObject, s3:ListBucket, and s3:HeadBucket permissions for this bucket.'
+      } else if (error.name === 'InvalidAccessKeyId' || error.$metadata?.httpStatusCode === 403) {
+        status.error = 'Invalid AWS Access Key ID. Check VITE_AWS_ACCESS_KEY_ID in Amplify environment variables.'
       } else if (error.name === 'SignatureDoesNotMatch') {
-        status.error = 'Invalid AWS Secret Access Key. Please check your credentials.'
+        status.error = 'Invalid AWS Secret Access Key. Check VITE_AWS_SECRET_ACCESS_KEY in Amplify environment variables.'
       } else if (error.name === 'CredentialsError') {
-        status.error = 'AWS credentials not configured properly. Please check your .env file.'
-      } else if (error.code === 'NetworkingError' || error.message?.includes('network')) {
-        status.error = 'Network error - check internet connection and AWS service availability.'
+        status.error = 'AWS credentials not configured properly in Amplify environment variables.'
+      } else if (error.code === 'NetworkingError' || error.message?.includes('network') || error.message?.includes('timeout')) {
+        status.error = 'Network error - check internet connection and AWS service availability. May be a timeout issue in Amplify.'
+      } else if (error.name === 'UnknownEndpoint') {
+        status.error = `Invalid region '${this.region}' or endpoint configuration.`
       } else {
-        status.error = `Connection failed: ${error.message || error.name || 'Unknown error'}`
+        status.error = `Connection failed: ${error.message || error.name || 'Unknown error'} (Status: ${error.$metadata?.httpStatusCode || 'unknown'})`
       }
       
       return status
@@ -153,6 +189,11 @@ class S3Service {
   }
 
   async getLatestDisasterData(): Promise<TwitterDisasterData[]> {
+    if (!this.s3Client) {
+      console.error('❌ S3 client not initialized')
+      return []
+    }
+
     try {
       console.log('🔍 Fetching latest disaster data from S3...')
       
@@ -160,8 +201,6 @@ class S3Service {
       const listCommand = new ListObjectsV2Command({
         Bucket: this.bucketName,
         MaxKeys: 20, // Get more files to ensure we have recent data
-        // Sort by last modified (most recent first)
-        // Note: S3 doesn't sort by default, we'll sort in code
       })
 
       const listResponse = await this.s3Client.send(listCommand)
@@ -210,6 +249,10 @@ class S3Service {
   }
 
   private async getObjectData(key: string): Promise<TwitterDisasterData[] | null> {
+    if (!this.s3Client) {
+      return null
+    }
+
     try {
       const command = new GetObjectCommand({
         Bucket: this.bucketName,

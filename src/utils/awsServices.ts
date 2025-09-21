@@ -19,26 +19,61 @@ import {
   DetectKeyPhrasesCommand 
 } from '@aws-sdk/client-comprehend'
 
-// AWS Configuration
+// AWS Configuration with enhanced error handling
 const AWS_REGION = import.meta.env.VITE_AWS_REGION || 'us-east-1'
 const AWS_ACCESS_KEY_ID = import.meta.env.VITE_AWS_ACCESS_KEY_ID || ''
 const AWS_SECRET_ACCESS_KEY = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || ''
+
+console.log('🔧 AWS Configuration Check:')
+console.log('  Region:', AWS_REGION)
+console.log('  Access Key ID:', AWS_ACCESS_KEY_ID ? `${AWS_ACCESS_KEY_ID.substring(0, 8)}...` : 'MISSING')
+console.log('  Secret Access Key:', AWS_SECRET_ACCESS_KEY ? 'PRESENT' : 'MISSING')
+console.log('  Environment:', import.meta.env.MODE)
+
+// Validate credentials
+if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+  console.error('❌ AWS credentials missing! Check environment variables in Amplify console.')
+  console.error('Required variables: VITE_AWS_ACCESS_KEY_ID, VITE_AWS_SECRET_ACCESS_KEY')
+}
 
 const awsConfig = {
   region: AWS_REGION,
   credentials: {
     accessKeyId: AWS_ACCESS_KEY_ID,
     secretAccessKey: AWS_SECRET_ACCESS_KEY
+  },
+  // Enhanced configuration for production
+  maxAttempts: 3,
+  retryMode: 'adaptive' as const,
+  requestHandler: {
+    requestTimeout: 30000,
+    connectionTimeout: 10000
   }
 }
 
-// Initialize AWS clients
-export const kinesisClient = new KinesisClient(awsConfig)
-export const bedrockClient = new BedrockRuntimeClient(awsConfig)
-export const lambdaClient = new LambdaClient(awsConfig)
-export const comprehendClient = new ComprehendClient(awsConfig)
+// Initialize AWS clients with error handling
+let kinesisClient: KinesisClient | null = null
+let bedrockClient: BedrockRuntimeClient | null = null
+let lambdaClient: LambdaClient | null = null
+let comprehendClient: ComprehendClient | null = null
 
-// Kinesis Service
+try {
+  if (AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
+    kinesisClient = new KinesisClient(awsConfig)
+    bedrockClient = new BedrockRuntimeClient(awsConfig)
+    lambdaClient = new LambdaClient(awsConfig)
+    comprehendClient = new ComprehendClient(awsConfig)
+    console.log('✅ AWS clients initialized successfully')
+  } else {
+    console.warn('⚠️ AWS clients not initialized - missing credentials')
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize AWS clients:', error)
+}
+
+export { kinesisClient, bedrockClient, lambdaClient, comprehendClient }
+
+// Kinesis Service with enhanced error handling
 export class KinesisService {
   private streamName: string
 
@@ -47,6 +82,10 @@ export class KinesisService {
   }
 
   async putRecord(data: any, partitionKey: string = 'default') {
+    if (!kinesisClient) {
+      throw new Error('Kinesis client not initialized - check AWS credentials')
+    }
+
     try {
       const command = new PutRecordCommand({
         StreamName: this.streamName,
@@ -57,13 +96,29 @@ export class KinesisService {
       const response = await kinesisClient.send(command)
       console.log('✅ Kinesis record sent:', response.SequenceNumber)
       return response
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Kinesis error:', error)
+      
+      // Enhanced error reporting
+      if (error.name === 'AccessDeniedException') {
+        throw new Error('Kinesis access denied - check IAM permissions')
+      } else if (error.name === 'ResourceNotFoundException') {
+        throw new Error(`Kinesis stream '${this.streamName}' not found`)
+      } else if (error.name === 'InvalidAccessKeyId') {
+        throw new Error('Invalid AWS Access Key ID')
+      } else if (error.name === 'SignatureDoesNotMatch') {
+        throw new Error('Invalid AWS Secret Access Key')
+      }
+      
       throw error
     }
   }
 
   async checkStreamStatus() {
+    if (!kinesisClient) {
+      return { status: 'ERROR', shards: 0, streamName: this.streamName, error: 'Client not initialized' }
+    }
+
     try {
       const command = new DescribeStreamCommand({
         StreamName: this.streamName
@@ -75,13 +130,22 @@ export class KinesisService {
         shards: response.StreamDescription?.Shards?.length || 0,
         streamName: this.streamName
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Kinesis stream check error:', error)
-      return { status: 'ERROR', shards: 0, streamName: this.streamName }
+      return { 
+        status: 'ERROR', 
+        shards: 0, 
+        streamName: this.streamName,
+        error: error.message || error.name
+      }
     }
   }
 
   async listStreams() {
+    if (!kinesisClient) {
+      throw new Error('Kinesis client not initialized')
+    }
+
     try {
       const command = new ListStreamsCommand({})
       const response = await kinesisClient.send(command)
@@ -93,9 +157,13 @@ export class KinesisService {
   }
 }
 
-// Bedrock Service for AI Analysis
+// Bedrock Service with enhanced error handling
 export class BedrockService {
   async analyzeDisasterText(text: string, modelId: string = 'anthropic.claude-3-sonnet-20240229-v1:0') {
+    if (!bedrockClient) {
+      throw new Error('Bedrock client not initialized - check AWS credentials')
+    }
+
     try {
       const prompt = `Analyze this text for disaster-related information:
       
@@ -131,13 +199,24 @@ Respond in JSON format.`
       
       console.log('✅ Bedrock analysis complete')
       return responseBody.content[0].text
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Bedrock error:', error)
+      
+      if (error.name === 'AccessDeniedException') {
+        throw new Error('Bedrock access denied - check IAM permissions')
+      } else if (error.name === 'ValidationException') {
+        throw new Error('Invalid Bedrock model or parameters')
+      }
+      
       throw error
     }
   }
 
   async generateDisasterResponse(disasterType: string, severity: string, location: string) {
+    if (!bedrockClient) {
+      throw new Error('Bedrock client not initialized - check AWS credentials')
+    }
+
     try {
       const prompt = `Generate an emergency response recommendation for:
       
@@ -181,9 +260,13 @@ Keep response concise and actionable.`
   }
 }
 
-// Lambda Service
+// Lambda Service with enhanced error handling
 export class LambdaService {
   async invokeFunction(functionName: string, payload: any) {
+    if (!lambdaClient) {
+      throw new Error('Lambda client not initialized - check AWS credentials')
+    }
+
     try {
       const command = new InvokeCommand({
         FunctionName: functionName,
@@ -200,8 +283,15 @@ export class LambdaService {
       }
       
       return null
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Lambda invocation error:', error)
+      
+      if (error.name === 'AccessDeniedException') {
+        throw new Error('Lambda access denied - check IAM permissions')
+      } else if (error.name === 'ResourceNotFoundException') {
+        throw new Error(`Lambda function '${functionName}' not found`)
+      }
+      
       throw error
     }
   }
@@ -220,9 +310,13 @@ export class LambdaService {
   }
 }
 
-// Comprehend Service for Text Analysis
+// Comprehend Service with enhanced error handling
 export class ComprehendService {
   async analyzeSentiment(text: string) {
+    if (!comprehendClient) {
+      throw new Error('Comprehend client not initialized - check AWS credentials')
+    }
+
     try {
       const command = new DetectSentimentCommand({
         Text: text,
@@ -232,13 +326,22 @@ export class ComprehendService {
       const response = await comprehendClient.send(command)
       console.log('✅ Comprehend sentiment analysis complete')
       return response
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Comprehend sentiment error:', error)
+      
+      if (error.name === 'AccessDeniedException') {
+        throw new Error('Comprehend access denied - check IAM permissions')
+      }
+      
       throw error
     }
   }
 
   async extractEntities(text: string) {
+    if (!comprehendClient) {
+      throw new Error('Comprehend client not initialized - check AWS credentials')
+    }
+
     try {
       const command = new DetectEntitiesCommand({
         Text: text,
@@ -255,6 +358,10 @@ export class ComprehendService {
   }
 
   async extractKeyPhrases(text: string) {
+    if (!comprehendClient) {
+      throw new Error('Comprehend client not initialized - check AWS credentials')
+    }
+
     try {
       const command = new DetectKeyPhrasesCommand({
         Text: text,
@@ -292,50 +399,67 @@ export class ComprehendService {
   }
 }
 
-// Service instances
+// Service instances with null checks
 export const kinesisService = new KinesisService()
 export const bedrockService = new BedrockService()
 export const lambdaService = new LambdaService()
 export const comprehendService = new ComprehendService()
 
-// Connection test function
+// Enhanced connection test function
 export async function testAWSConnections() {
   console.log('🔍 Testing AWS service connections...')
+  console.log('Environment:', import.meta.env.MODE)
+  console.log('Region:', AWS_REGION)
   
   const results = {
     kinesis: false,
     bedrock: false,
     lambda: false,
     comprehend: false,
-    s3: false
+    s3: false,
+    errors: {} as Record<string, string>
   }
 
+  // Test Kinesis
   try {
-    // Test Kinesis
-    const streams = await kinesisService.listStreams()
-    results.kinesis = true
-    console.log('✅ Kinesis connected, streams:', streams.length)
-  } catch (error) {
+    if (kinesisClient) {
+      const streams = await kinesisService.listStreams()
+      results.kinesis = true
+      console.log('✅ Kinesis connected, streams:', streams.length)
+    } else {
+      results.errors.kinesis = 'Client not initialized'
+    }
+  } catch (error: any) {
     console.error('❌ Kinesis connection failed:', error)
+    results.errors.kinesis = error.message || error.name
   }
 
+  // Test Comprehend
   try {
-    // Test Comprehend
-    await comprehendService.analyzeSentiment('Test message for connection')
-    results.comprehend = true
-    console.log('✅ Comprehend connected')
-  } catch (error) {
+    if (comprehendClient) {
+      await comprehendService.analyzeSentiment('Test message for connection')
+      results.comprehend = true
+      console.log('✅ Comprehend connected')
+    } else {
+      results.errors.comprehend = 'Client not initialized'
+    }
+  } catch (error: any) {
     console.error('❌ Comprehend connection failed:', error)
+    results.errors.comprehend = error.message || error.name
   }
 
+  // Test S3
   try {
-    // Test S3 (using existing service)
     const { s3Service } = await import('./s3Service')
     const status = await s3Service.testConnection()
     results.s3 = status.connected
+    if (!status.connected && status.error) {
+      results.errors.s3 = status.error
+    }
     console.log('✅ S3 connected:', status.connected)
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ S3 connection failed:', error)
+    results.errors.s3 = error.message || error.name
   }
 
   return results
