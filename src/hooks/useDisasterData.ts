@@ -1,22 +1,63 @@
 import { useState, useEffect } from 'react'
-import { s3Service, TwitterDisasterData } from '../utils/s3Service'
 
-export const useDisasterData = (refreshInterval: number = 30000) => {
-  const [data, setData] = useState<TwitterDisasterData[]>([])
+export interface DisasterData {
+  id: string
+  disaster_type: 'flood' | 'landslide' | 'earthquake' | 'storm'
+  location: string
+  coordinates: {
+    lat: number
+    lng: number
+  }
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  timestamp: string
+  description: string
+  source: string
+  affected_areas?: string[]
+  casualties?: number
+  status: 'active' | 'resolved' | 'monitoring'
+}
+
+export const useDisasterData = () => {
+  const [data, setData] = useState<DisasterData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const fetchData = async () => {
     try {
       setLoading(true)
       setError(null)
-      const disasterData = await s3Service.getLatestDisasterData()
-      setData(disasterData)
-      setLastUpdated(new Date())
+      
+      // Mock data for now to prevent crashes
+      const mockData: DisasterData[] = [
+        {
+          id: '1',
+          disaster_type: 'flood',
+          location: 'Kuala Lumpur',
+          coordinates: { lat: 3.139, lng: 101.6869 },
+          severity: 'high',
+          timestamp: new Date().toISOString(),
+          description: 'Heavy rainfall causing flash floods in city center',
+          source: 'Emergency Services',
+          status: 'active'
+        },
+        {
+          id: '2',
+          disaster_type: 'landslide',
+          location: 'Cameron Highlands',
+          coordinates: { lat: 4.4696, lng: 101.3778 },
+          severity: 'medium',
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+          description: 'Landslide risk due to heavy rainfall',
+          source: 'Weather Station',
+          status: 'monitoring'
+        }
+      ]
+      
+      setData(mockData)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch disaster data')
       console.error('Error fetching disaster data:', err)
+      setError('Failed to fetch disaster data')
+      setData([]) // Set empty array on error
     } finally {
       setLoading(false)
     }
@@ -25,44 +66,11 @@ export const useDisasterData = (refreshInterval: number = 30000) => {
   useEffect(() => {
     fetchData()
     
-    // Set up polling for new data
-    const interval = setInterval(fetchData, refreshInterval)
-    
-    return () => clearInterval(interval)
-  }, [refreshInterval])
-
-  return {
-    data,
-    loading,
-    error,
-    lastUpdated,
-    refetch: fetchData
-  }
-}
-
-export const useHighSeverityAlerts = () => {
-  const [alerts, setAlerts] = useState<TwitterDisasterData[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchHighSeverityAlerts = async () => {
-      try {
-        const highSeverityData = await s3Service.getHighSeverityAlerts()
-        setAlerts(highSeverityData)
-      } catch (error) {
-        console.error('Error fetching high severity alerts:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchHighSeverityAlerts()
-    
-    // Refresh every 15 seconds for high priority alerts
-    const interval = setInterval(fetchHighSeverityAlerts, 15000)
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000)
     
     return () => clearInterval(interval)
   }, [])
 
-  return { alerts, loading }
+  return { data, loading, error, refetch: fetchData }
 }

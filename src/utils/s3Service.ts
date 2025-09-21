@@ -35,19 +35,34 @@ class S3Service {
   private bucketName: string
 
   constructor() {
+    const region = import.meta.env.VITE_AWS_REGION || 'us-east-1'
+    const accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID || ''
+    const secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || ''
+    
+    console.log('🔧 S3Service Configuration:')
+    console.log('  Region:', region)
+    console.log('  Access Key:', accessKeyId ? `${accessKeyId.substring(0, 8)}...` : 'NOT SET')
+    console.log('  Secret Key:', secretAccessKey ? 'SET' : 'NOT SET')
+    
     this.s3Client = new S3Client({
-      region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
+      region,
       credentials: {
-        accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || ''
+        accessKeyId,
+        secretAccessKey
       },
-      // Add CORS configuration for browser requests
+      // Enhanced configuration for browser requests
       requestHandler: {
-        requestTimeout: 10000,
+        requestTimeout: 15000,
         httpsAgent: undefined
-      }
+      },
+      // Force path-style URLs for better compatibility
+      forcePathStyle: true,
+      // Add custom endpoint if needed (uncomment if using custom S3 endpoint)
+      // endpoint: 'https://s3.amazonaws.com'
     })
+    
     this.bucketName = import.meta.env.VITE_S3_BUCKET_NAME || 'cloud-cuties-tweet-bucket'
+    console.log('  Bucket Name:', this.bucketName)
   }
 
   async testConnection(): Promise<S3ConnectionStatus> {
@@ -63,7 +78,8 @@ class S3Service {
 
     // First, validate credentials are present
     if (!import.meta.env.VITE_AWS_ACCESS_KEY_ID || !import.meta.env.VITE_AWS_SECRET_ACCESS_KEY) {
-      status.error = 'AWS credentials missing from .env file'
+      status.error = 'AWS credentials missing from .env file. Please add VITE_AWS_ACCESS_KEY_ID and VITE_AWS_SECRET_ACCESS_KEY'
+      console.error('❌ Missing AWS credentials in .env file')
       return status
     }
 
@@ -77,7 +93,7 @@ class S3Service {
         Bucket: this.bucketName
       })
       
-      const headResponse = await this.s3Client.send(headCommand)
+      await this.s3Client.send(headCommand)
       status.bucketExists = true
       status.credentialsValid = true
       console.log('✅ Bucket exists and accessible')
@@ -86,7 +102,7 @@ class S3Service {
       // Test 2: Check if we can list objects (read permission)
       const listCommand = new ListObjectsV2Command({
         Bucket: this.bucketName,
-        MaxKeys: 1
+        MaxKeys: 5 // Get first 5 objects to test
       })
 
       const listResponse = await this.s3Client.send(listCommand)
@@ -97,12 +113,12 @@ class S3Service {
       console.log(`📊 Bucket contains ${listResponse.KeyCount || 0} objects`)
       
       if (listResponse.Contents && listResponse.Contents.length > 0) {
-        console.log('📁 Sample objects found:')
-        listResponse.Contents.slice(0, 3).forEach(obj => {
-          console.log(`  - ${obj.Key} (${obj.Size} bytes, modified: ${obj.LastModified})`)
+        console.log('📁 Recent objects found:')
+        listResponse.Contents.forEach(obj => {
+          console.log(`  - ${obj.Key} (${obj.Size} bytes, modified: ${obj.LastModified?.toLocaleString()})`)
         })
       } else {
-        console.log('📭 Bucket is empty (this is expected if backend hasn\'t started yet)')
+        console.log('📭 Bucket is empty - backend may not have started sending data yet')
       }
 
       return status
@@ -110,24 +126,24 @@ class S3Service {
     } catch (error: any) {
       console.error('❌ S3 Connection Error:', error)
       
-      // Detailed error analysis
-      if (error.message?.includes('Failed to fetch') || error.name === 'TypeError') {
+      // Enhanced error analysis
+      if (error.message?.includes('Failed to fetch') || error.name === 'TypeError' || error.message?.includes('CORS')) {
         status.corsIssue = true
-        status.error = 'CORS issue: S3 bucket needs CORS configuration for browser access'
+        status.error = 'CORS issue: S3 bucket needs CORS configuration for browser access. Please configure CORS policy on your S3 bucket.'
         console.error('🚫 CORS Error: The S3 bucket needs CORS policy configured')
-        console.error('💡 Solution: Add CORS policy to allow browser requests')
+        console.error('💡 Solution: Add CORS policy to allow browser requests from your domain')
       } else if (error.name === 'NoSuchBucket') {
-        status.error = `Bucket '${this.bucketName}' does not exist`
+        status.error = `Bucket '${this.bucketName}' does not exist. Please verify the bucket name.`
       } else if (error.name === 'AccessDenied' || error.name === 'Forbidden') {
-        status.error = 'Access denied - check IAM permissions for S3'
+        status.error = 'Access denied - check IAM permissions for S3. The user needs s3:GetObject and s3:ListBucket permissions.'
       } else if (error.name === 'InvalidAccessKeyId') {
-        status.error = 'Invalid AWS Access Key ID'
+        status.error = 'Invalid AWS Access Key ID. Please check your credentials.'
       } else if (error.name === 'SignatureDoesNotMatch') {
-        status.error = 'Invalid AWS Secret Access Key'
+        status.error = 'Invalid AWS Secret Access Key. Please check your credentials.'
       } else if (error.name === 'CredentialsError') {
-        status.error = 'AWS credentials not configured properly'
+        status.error = 'AWS credentials not configured properly. Please check your .env file.'
       } else if (error.code === 'NetworkingError' || error.message?.includes('network')) {
-        status.error = 'Network error - check internet connection'
+        status.error = 'Network error - check internet connection and AWS service availability.'
       } else {
         status.error = `Connection failed: ${error.message || error.name || 'Unknown error'}`
       }
@@ -138,40 +154,57 @@ class S3Service {
 
   async getLatestDisasterData(): Promise<TwitterDisasterData[]> {
     try {
+      console.log('🔍 Fetching latest disaster data from S3...')
+      
       // List objects to get the latest files
       const listCommand = new ListObjectsV2Command({
         Bucket: this.bucketName,
-        MaxKeys: 10
+        MaxKeys: 20, // Get more files to ensure we have recent data
+        // Sort by last modified (most recent first)
+        // Note: S3 doesn't sort by default, we'll sort in code
       })
 
       const listResponse = await this.s3Client.send(listCommand)
       
       if (!listResponse.Contents || listResponse.Contents.length === 0) {
-        console.log('No disaster data found in S3')
+        console.log('📭 No disaster data found in S3 bucket')
         return []
       }
 
-      // Sort by last modified to get latest files
-      const sortedFiles = listResponse.Contents
+      console.log(`📦 Found ${listResponse.Contents.length} objects in S3`)
+
+      // Filter and sort by last modified to get latest files
+      const jsonFiles = listResponse.Contents
         .filter(obj => obj.Key && obj.Key.endsWith('.json'))
         .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0))
-        .slice(0, 5) // Get latest 5 files
+        .slice(0, 10) // Get latest 10 files
+
+      console.log(`📄 Processing ${jsonFiles.length} JSON files`)
 
       const allData: TwitterDisasterData[] = []
 
       // Fetch data from each file
-      for (const file of sortedFiles) {
+      for (const file of jsonFiles) {
         if (file.Key) {
+          console.log(`📖 Reading file: ${file.Key}`)
           const data = await this.getObjectData(file.Key)
-          if (data) {
+          if (data && data.length > 0) {
+            console.log(`  ✅ Found ${data.length} records in ${file.Key}`)
             allData.push(...data)
           }
         }
       }
 
-      return allData.slice(0, 20) // Return latest 20 alerts
+      console.log(`🎯 Total disaster records retrieved: ${allData.length}`)
+      
+      // Sort by created_at to get most recent alerts first
+      const sortedData = allData.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+
+      return sortedData.slice(0, 50) // Return latest 50 alerts
     } catch (error) {
-      console.error('Error fetching disaster data from S3:', error)
+      console.error('❌ Error fetching disaster data from S3:', error)
       return []
     }
   }
@@ -187,21 +220,30 @@ class S3Service {
       
       if (response.Body) {
         const bodyText = await response.Body.transformToString()
+        console.log(`📝 File ${key} content preview:`, bodyText.substring(0, 200) + '...')
+        
         const jsonData = JSON.parse(bodyText)
         
-        // Handle different JSON structures
+        // Handle different JSON structures that your backend might produce
         if (Array.isArray(jsonData)) {
           return jsonData
-        } else if (jsonData.alerts || jsonData.data) {
-          return jsonData.alerts || jsonData.data
+        } else if (jsonData.alerts) {
+          return jsonData.alerts
+        } else if (jsonData.data) {
+          return jsonData.data
+        } else if (jsonData.tweets) {
+          return jsonData.tweets
+        } else if (jsonData.disasters) {
+          return jsonData.disasters
         } else {
+          // Single object, wrap in array
           return [jsonData]
         }
       }
       
       return null
     } catch (error) {
-      console.error(`Error reading S3 object ${key}:`, error)
+      console.error(`❌ Error reading S3 object ${key}:`, error)
       return null
     }
   }
@@ -209,7 +251,7 @@ class S3Service {
   async getDisasterDataByType(disasterType: string): Promise<TwitterDisasterData[]> {
     const allData = await this.getLatestDisasterData()
     return allData.filter(item => 
-      item.disaster_type.toLowerCase() === disasterType.toLowerCase()
+      item.disaster_type?.toLowerCase() === disasterType.toLowerCase()
     )
   }
 

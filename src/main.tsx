@@ -2,17 +2,17 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
-import { checkAmplifyConfig } from './lib/amplify-config'
 
-// Force check Amplify configuration on startup
-console.log('🚀 Starting application...')
-const configSuccess = checkAmplifyConfig()
+console.log('🚀 Starting Rescuties application...')
 
-if (!configSuccess) {
-  console.error('❌ Amplify configuration failed! Check your .env file.')
-} else {
-  console.log('✅ Amplify configuration successful!')
-}
+// Add error boundary for debugging
+window.addEventListener('error', (event) => {
+  console.error('Global error:', event.error)
+})
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason)
+})
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

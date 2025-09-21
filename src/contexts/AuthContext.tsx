@@ -1,5 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { getCurrentAuthUser, isAuthenticated, logout as authLogout, AuthUser } from '../lib/auth'
+import React, { createContext, useContext, useState, ReactNode } from 'react'
+
+interface AuthUser {
+  id: string
+  email: string
+  name?: string
+}
 
 interface AuthContextType {
   user: AuthUser | null
@@ -26,29 +31,8 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-
-  const refreshUser = async () => {
-    try {
-      setIsLoading(true)
-      const authenticated = await isAuthenticated()
-      if (authenticated) {
-        const currentUser = await getCurrentAuthUser()
-        setUser(currentUser)
-        setIsLoggedIn(true)
-      } else {
-        setUser(null)
-        setIsLoggedIn(false)
-      }
-    } catch (error) {
-      console.error('Error refreshing user:', error)
-      setUser(null)
-      setIsLoggedIn(false)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const login = (user: AuthUser) => {
     setUser(user)
@@ -57,7 +41,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await authLogout()
       setUser(null)
       setIsLoggedIn(false)
     } catch (error) {
@@ -65,9 +48,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  useEffect(() => {
-    refreshUser()
-  }, [])
+  const refreshUser = async () => {
+    try {
+      setIsLoading(true)
+      // For now, just set loading to false since we don't have auth
+      setIsLoading(false)
+    } catch (error) {
+      console.error('Error refreshing user:', error)
+      setIsLoading(false)
+    }
+  }
 
   const value: AuthContextType = {
     user,
