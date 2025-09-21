@@ -1,0 +1,23 @@
+/* App.css - Additional styles for Rescuties Platform */
+
+/* This file complements the main index.css with Tailwind CSS */
+/* Most styling is handled by Tailwind and index.css */
+
+/* Additional component-specific styles can be added here if needed */
+.app-container {
+  /* Reserved for future app-specific styles */
+}
+
+/* Ensure smooth transitions for all interactive elements */
+.interactive-element {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Additional utility classes */
+.text-shadow {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.backdrop-blur-strong {
+  backdrop-filter: blur(20px);
+}

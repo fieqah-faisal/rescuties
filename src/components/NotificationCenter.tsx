@@ -83,6 +83,7 @@ const NotificationCenter = () => {
   const initializeSNSConnection = async () => {
     try {
       console.log('📡 Initializing Amazon SNS connection...')
+      console.log('🎯 SNS Topic ARN:', import.meta.env.VITE_SNS_TOPIC_ARN)
       
       const isValid = await snsClient.validateConnection()
       const status = snsClient.getConnectionStatus()
@@ -93,6 +94,7 @@ const NotificationCenter = () => {
       
       if (isValid) {
         console.log('✅ Amazon SNS connection ready')
+        console.log('📍 Topic ARN configured:', import.meta.env.VITE_SNS_TOPIC_ARN)
       } else {
         console.error('❌ SNS connection failed:', error)
       }
@@ -109,10 +111,23 @@ const NotificationCenter = () => {
     setIsLoading(true)
     
     try {
+      const topicArn = import.meta.env.VITE_SNS_TOPIC_ARN
+      
+      if (!topicArn) {
+        console.error('❌ SNS Topic ARN not configured')
+        setLastError('SNS Topic ARN not configured in environment variables')
+        setIsLoading(false)
+        return
+      }
+
+      console.log('📝 Creating subscription to:', topicArn)
+      console.log('📧 Endpoint:', newSubscription.endpoint)
+      console.log('📱 Protocol:', newSubscription.type)
+
       const subscription: SNSSubscription = {
         protocol: newSubscription.type,
         endpoint: newSubscription.endpoint,
-        topicArn: import.meta.env.VITE_SNS_TOPIC_ARN
+        topicArn: topicArn
       }
 
       const response = await snsClient.subscribe(subscription)
@@ -132,17 +147,23 @@ const NotificationCenter = () => {
         
         setNewSubscription({ type: 'email', endpoint: '' })
         
+        console.log('✅ Subscription created successfully')
+        console.log('🔗 Subscription ARN:', response.subscriptionArn)
+        
         // Simulate confirmation after a delay
         setTimeout(() => {
           setSubscriptions(prev => prev.map(sub => 
             sub.id === newSub.id ? { ...sub, status: 'confirmed' } : sub
           ))
+          console.log('✅ Subscription confirmed')
         }, 3000)
       } else {
-        console.error('Subscription failed:', response.error)
+        console.error('❌ Subscription failed:', response.error)
+        setLastError(response.error || 'Subscription failed')
       }
     } catch (error) {
-      console.error('Subscription error:', error)
+      console.error('❌ Subscription error:', error)
+      setLastError(`Subscription error: ${error}`)
     } finally {
       setIsLoading(false)
     }
@@ -153,32 +174,43 @@ const NotificationCenter = () => {
     if (!subscription?.subscriptionArn) return
 
     try {
+      console.log('🗑️ Unsubscribing from:', subscription.subscriptionArn)
+      
       const response = await snsClient.unsubscribe(subscription.subscriptionArn)
       
       if (response.success) {
         const updatedSubscriptions = subscriptions.filter(sub => sub.id !== subscriptionId)
         setSubscriptions(updatedSubscriptions)
         localStorage.setItem('disaster-subscriptions', JSON.stringify(updatedSubscriptions))
+        console.log('✅ Unsubscribed successfully')
+      } else {
+        console.error('❌ Unsubscribe failed:', response.error)
       }
     } catch (error) {
-      console.error('Unsubscribe error:', error)
+      console.error('❌ Unsubscribe error:', error)
     }
   }
 
   const sendTestNotification = async () => {
-    if (subscriptions.length === 0) return
+    if (subscriptions.length === 0) {
+      console.log('⚠️ No subscriptions available for test notification')
+      return
+    }
 
     setIsLoading(true)
     
     try {
+      console.log('🧪 Sending test notification...')
+      
       const testMessage: NotificationMessage = {
         subject: '🧪 Test Alert - Rescuties Notification System',
-        message: 'This is a test notification from the Rescuties disaster response platform. Your notification subscription is working correctly.\n\nIf you received this message, your emergency alerts are properly configured.',
+        message: 'This is a test notification from the Rescuties disaster response platform. Your notification subscription is working correctly.\n\nIf you received this message, your emergency alerts are properly configured.\n\nTopic ARN: ' + import.meta.env.VITE_SNS_TOPIC_ARN,
         attributes: {
           alertType: 'test',
           severity: 'low',
           location: 'System Test',
-          platform: 'rescuties'
+          platform: 'rescuties',
+          timestamp: new Date().toISOString()
         }
       }
 
@@ -186,29 +218,40 @@ const NotificationCenter = () => {
       
       if (response.success) {
         console.log('✅ Test notification sent successfully')
+        console.log('📧 Message ID:', response.messageId)
+      } else {
+        console.error('❌ Test notification failed:', response.error)
+        setLastError(response.error || 'Test notification failed')
       }
     } catch (error) {
-      console.error('Test notification error:', error)
+      console.error('❌ Test notification error:', error)
+      setLastError(`Test notification error: ${error}`)
     } finally {
       setIsLoading(false)
     }
   }
 
   const sendDisasterAlert = async (notification: DisasterNotification) => {
-    if (subscriptions.length === 0) return
+    if (subscriptions.length === 0) {
+      console.log('⚠️ No subscriptions available for disaster alert')
+      return
+    }
 
     setIsLoading(true)
 
     try {
+      console.log('🚨 Sending disaster alert:', notification.title)
+      
       const alertMessage: NotificationMessage = {
         subject: `🚨 ${notification.title}`,
-        message: `${notification.message}\n\nLocation: ${notification.location}\nSeverity: ${notification.severity.toUpperCase()}\nTime: ${new Date(notification.timestamp).toLocaleString()}\n\nFor more information and updates, visit the Rescuties platform.\n\nStay safe and follow local emergency guidelines.`,
+        message: `${notification.message}\n\nLocation: ${notification.location}\nSeverity: ${notification.severity.toUpperCase()}\nTime: ${new Date(notification.timestamp).toLocaleString()}\n\nFor more information and updates, visit the Rescuties platform.\n\nStay safe and follow local emergency guidelines.\n\nAlert ID: ${notification.id}`,
         attributes: {
           alertType: notification.type,
           severity: notification.severity,
           location: notification.location,
           timestamp: notification.timestamp,
-          platform: 'rescuties'
+          platform: 'rescuties',
+          alertId: notification.id
         }
       }
 
@@ -219,9 +262,14 @@ const NotificationCenter = () => {
           notif.id === notification.id ? { ...notif, sent: true } : notif
         ))
         console.log('✅ Disaster alert sent successfully')
+        console.log('📧 Message ID:', response.messageId)
+      } else {
+        console.error('❌ Disaster alert failed:', response.error)
+        setLastError(response.error || 'Disaster alert failed')
       }
     } catch (error) {
-      console.error('Disaster alert error:', error)
+      console.error('❌ Disaster alert error:', error)
+      setLastError(`Disaster alert error: ${error}`)
     } finally {
       setIsLoading(false)
     }
@@ -539,7 +587,10 @@ const NotificationCenter = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-400">Topic ARN:</span>
                       <span className={import.meta.env.VITE_SNS_TOPIC_ARN ? 'text-green-400' : 'text-red-400'}>
-                        {import.meta.env.VITE_SNS_TOPIC_ARN ? 'Present' : 'Missing'}
+                        {import.meta.env.VITE_SNS_TOPIC_ARN ? 
+                          `...${import.meta.env.VITE_SNS_TOPIC_ARN.split(':').pop()}` : 
+                          'Missing'
+                        }
                       </span>
                     </div>
                   </div>

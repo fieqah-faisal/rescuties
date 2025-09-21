@@ -1,5 +1,5 @@
 // Amazon SNS Client Configuration
-// This file handles SNS integration for notification services
+// Enhanced for AWS Amplify production deployment
 
 import { SNSClient as AWSSNSClient, PublishCommand, SubscribeCommand, UnsubscribeCommand, ListTopicsCommand, GetTopicAttributesCommand } from '@aws-sdk/client-sns'
 
@@ -43,12 +43,20 @@ export class SNSClient {
 
   private initializeClient() {
     console.log('📡 Initializing SNS Client with config:', this.config)
+    console.log('🌐 Environment:', import.meta.env.MODE)
     
     // Check if AWS credentials are available
     const accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID
     const secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY
+    const topicArn = import.meta.env.VITE_SNS_TOPIC_ARN
     
-    if (accessKeyId && secretAccessKey) {
+    console.log('🔑 AWS Credentials Check:')
+    console.log('  Access Key ID:', accessKeyId ? `${accessKeyId.substring(0, 8)}...` : 'MISSING')
+    console.log('  Secret Access Key:', secretAccessKey ? 'PRESENT' : 'MISSING')
+    console.log('  Topic ARN:', topicArn ? `...${topicArn.split(':').pop()}` : 'MISSING')
+    console.log('  Region:', this.config.region)
+    
+    if (accessKeyId && secretAccessKey && topicArn) {
       try {
         this.client = new AWSSNSClient({
           region: this.config.region,
@@ -56,31 +64,45 @@ export class SNSClient {
             accessKeyId,
             secretAccessKey,
             sessionToken: import.meta.env.VITE_AWS_SESSION_TOKEN // Optional for temporary credentials
+          },
+          // Enhanced configuration for production
+          maxAttempts: 3,
+          retryMode: 'adaptive',
+          requestHandler: {
+            requestTimeout: 30000,
+            connectionTimeout: 10000
           }
         })
+        
+        // Update config with topic ARN from environment
+        this.config.topicArn = topicArn
         this.isConfigured = true
-        console.log('✅ SNS Client initialized with AWS credentials')
+        
+        console.log('✅ SNS Client initialized successfully')
         console.log('🔑 Access Key ID:', accessKeyId.substring(0, 8) + '...')
         console.log('🌍 Region:', this.config.region)
-        console.log('📍 Topic ARN:', this.config.topicArn)
+        console.log('📍 Topic ARN:', topicArn)
       } catch (error) {
         console.error('❌ Failed to initialize SNS Client:', error)
         this.isConfigured = false
         this.lastError = `Initialization failed: ${error}`
       }
     } else {
-      console.warn('⚠️ AWS credentials not found in environment variables')
-      console.log('📝 Missing credentials:')
-      console.log('- VITE_AWS_ACCESS_KEY_ID:', accessKeyId ? 'Present' : 'Missing')
-      console.log('- VITE_AWS_SECRET_ACCESS_KEY:', secretAccessKey ? 'Present' : 'Missing')
+      console.warn('⚠️ SNS configuration incomplete')
+      console.log('📝 Missing configuration in Amplify environment variables:')
+      if (!accessKeyId) console.log('- VITE_AWS_ACCESS_KEY_ID')
+      if (!secretAccessKey) console.log('- VITE_AWS_SECRET_ACCESS_KEY')
+      if (!topicArn) console.log('- VITE_SNS_TOPIC_ARN')
+      
       this.isConfigured = false
-      this.lastError = 'AWS credentials not found in environment variables'
+      this.lastError = 'SNS configuration incomplete - missing credentials or Topic ARN in Amplify environment variables'
     }
   }
 
   async publishMessage(notification: NotificationMessage): Promise<SNSResponse> {
     try {
-      console.log('📤 Publishing SNS message:', notification)
+      console.log('📤 Publishing SNS message:', notification.subject)
+      console.log('🌐 Environment:', import.meta.env.MODE)
 
       if (!this.client || !this.isConfigured) {
         const error = this.lastError || 'SNS Client not configured'
@@ -94,9 +116,13 @@ export class SNSClient {
       if (!this.config.topicArn) {
         return {
           success: false,
-          error: 'SNS Topic ARN not configured'
+          error: 'SNS Topic ARN not configured in environment variables'
         }
       }
+
+      console.log('📡 Publishing to Topic ARN:', this.config.topicArn)
+      console.log('📧 Subject:', notification.subject)
+      console.log('📝 Message length:', notification.message.length)
 
       const command = new PublishCommand({
         TopicArn: this.config.topicArn,
@@ -117,7 +143,8 @@ export class SNSClient {
 
       const response = await this.client.send(command)
       
-      console.log('✅ SNS message published successfully:', response.MessageId)
+      console.log('✅ SNS message published successfully')
+      console.log('📧 Message ID:', response.MessageId)
       
       return {
         messageId: response.MessageId,
@@ -125,6 +152,12 @@ export class SNSClient {
       }
     } catch (error: any) {
       console.error('❌ SNS publish error:', error)
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        statusCode: error.$metadata?.httpStatusCode
+      })
       
       let errorMessage = 'Unknown error occurred'
       
@@ -132,12 +165,18 @@ export class SNSClient {
         errorMessage = 'Invalid AWS credentials or user pool configuration'
       } else if (error.name === 'NotAuthorizedException') {
         errorMessage = 'AWS credentials not authorized for SNS operations'
-      } else if (error.name === 'AccessDeniedException') {
-        errorMessage = 'Access denied - check IAM permissions for SNS:Publish'
+      } else if (error.name === 'AccessDeniedException' || error.$metadata?.httpStatusCode === 403) {
+        errorMessage = 'Access denied - check IAM permissions for SNS:Publish in Amplify environment'
       } else if (error.name === 'InvalidParameterException') {
         errorMessage = 'Invalid parameters - check Topic ARN and message format'
       } else if (error.name === 'TopicDoesNotExistException') {
         errorMessage = 'SNS Topic does not exist or is not accessible'
+      } else if (error.name === 'InvalidAccessKeyId') {
+        errorMessage = 'Invalid AWS Access Key ID in Amplify environment variables'
+      } else if (error.name === 'SignatureDoesNotMatch') {
+        errorMessage = 'Invalid AWS Secret Access Key in Amplify environment variables'
+      } else if (error.code === 'NetworkingError' || error.message?.includes('network') || error.message?.includes('timeout')) {
+        errorMessage = 'Network error - check AWS service availability from Amplify'
       } else if (error.message) {
         errorMessage = error.message
       }
@@ -151,7 +190,7 @@ export class SNSClient {
 
   async subscribe(subscription: SNSSubscription): Promise<SNSResponse> {
     try {
-      console.log('📝 Creating SNS subscription:', subscription)
+      console.log('📝 Creating SNS subscription:', subscription.protocol, subscription.endpoint)
 
       if (!this.client || !this.isConfigured) {
         const error = this.lastError || 'SNS Client not configured'
@@ -161,6 +200,8 @@ export class SNSClient {
         }
       }
 
+      console.log('📡 Subscribing to Topic ARN:', subscription.topicArn)
+
       const command = new SubscribeCommand({
         TopicArn: subscription.topicArn,
         Protocol: subscription.protocol,
@@ -169,7 +210,8 @@ export class SNSClient {
 
       const response = await this.client.send(command)
       
-      console.log('✅ SNS subscription created:', response.SubscriptionArn)
+      console.log('✅ SNS subscription created successfully')
+      console.log('🔗 Subscription ARN:', response.SubscriptionArn)
       
       return {
         subscriptionArn: response.SubscriptionArn,
@@ -186,6 +228,10 @@ export class SNSClient {
         errorMessage = 'Invalid subscription parameters'
       } else if (error.name === 'TopicDoesNotExistException') {
         errorMessage = 'SNS Topic does not exist'
+      } else if (error.name === 'InvalidAccessKeyId') {
+        errorMessage = 'Invalid AWS Access Key ID'
+      } else if (error.name === 'SignatureDoesNotMatch') {
+        errorMessage = 'Invalid AWS Secret Access Key'
       } else if (error.message) {
         errorMessage = error.message
       }
@@ -230,6 +276,7 @@ export class SNSClient {
   async validateConnection(): Promise<boolean> {
     try {
       console.log('🔍 Validating SNS connection...')
+      console.log('🌐 Environment:', import.meta.env.MODE)
       
       if (!this.client || !this.isConfigured) {
         console.warn('⚠️ SNS Client not configured')
@@ -245,12 +292,22 @@ export class SNSClient {
       // If we have a topic ARN, try to get its attributes
       if (this.config.topicArn) {
         console.log('🔍 Testing SNS:GetTopicAttributes permission...')
+        console.log('📍 Topic ARN:', this.config.topicArn)
+        
         const getAttrsCommand = new GetTopicAttributesCommand({
           TopicArn: this.config.topicArn
         })
         const attrsResponse = await this.client.send(getAttrsCommand)
         console.log('✅ SNS:GetTopicAttributes successful')
         console.log('📊 Topic attributes:', Object.keys(attrsResponse.Attributes || {}))
+        
+        // Log some key topic information
+        if (attrsResponse.Attributes) {
+          console.log('📈 Topic Details:')
+          console.log('  - Display Name:', attrsResponse.Attributes.DisplayName || 'Not set')
+          console.log('  - Subscriptions Confirmed:', attrsResponse.Attributes.SubscriptionsConfirmed || '0')
+          console.log('  - Subscriptions Pending:', attrsResponse.Attributes.SubscriptionsPending || '0')
+        }
       }
       
       console.log('✅ SNS connection validated successfully')
@@ -258,15 +315,29 @@ export class SNSClient {
       return true
     } catch (error: any) {
       console.error('❌ SNS connection validation failed:', error)
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        statusCode: error.$metadata?.httpStatusCode
+      })
       
       let errorMessage = 'Connection validation failed'
       
-      if (error.name === 'AccessDeniedException') {
-        errorMessage = 'Access denied - check IAM permissions (SNS:ListTopics, SNS:GetTopicAttributes)'
+      if (error.name === 'AccessDeniedException' || error.$metadata?.httpStatusCode === 403) {
+        errorMessage = 'Access denied - check IAM permissions (SNS:ListTopics, SNS:GetTopicAttributes) in Amplify'
       } else if (error.name === 'InvalidUserPoolConfigException') {
-        errorMessage = 'Invalid AWS credentials'
+        errorMessage = 'Invalid AWS credentials in Amplify environment variables'
       } else if (error.name === 'NotAuthorizedException') {
         errorMessage = 'AWS credentials not authorized'
+      } else if (error.name === 'TopicDoesNotExistException') {
+        errorMessage = 'SNS Topic does not exist or is not accessible'
+      } else if (error.name === 'InvalidAccessKeyId') {
+        errorMessage = 'Invalid AWS Access Key ID in Amplify environment variables'
+      } else if (error.name === 'SignatureDoesNotMatch') {
+        errorMessage = 'Invalid AWS Secret Access Key in Amplify environment variables'
+      } else if (error.code === 'NetworkingError' || error.message?.includes('network') || error.message?.includes('timeout')) {
+        errorMessage = 'Network error - check AWS service availability from Amplify'
       } else if (error.message) {
         errorMessage = error.message
       }
