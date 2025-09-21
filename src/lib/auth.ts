@@ -25,23 +25,70 @@ export interface SignUpResult {
   }
 }
 
-// Register (Sign Up) - FIXED: Username and email are now separate
+// Register (Sign Up) - Enhanced with detailed logging
 export async function register(username: string, password: string, email: string): Promise<SignUpResult> {
   try {
-    // CRITICAL: Username must NOT be email format, email goes in attributes
-    const { isSignUpComplete, userId, nextStep } = await signUp({
-      username: username, // Non-email username (e.g., "john123", "user456")
+    console.log('=== REGISTRATION DEBUG ===')
+    console.log('Username:', username)
+    console.log('Email:', email)
+    console.log('Password length:', password.length)
+    console.log('Username contains @:', username.includes('@'))
+    
+    // Validate inputs before sending to Cognito
+    if (!username || username.trim().length === 0) {
+      throw new Error('Username is required')
+    }
+    
+    if (username.includes('@')) {
+      throw new Error('Username cannot contain @ symbol')
+    }
+    
+    if (!email || !email.includes('@')) {
+      throw new Error('Valid email is required')
+    }
+    
+    if (!password || password.length < 8) {
+      throw new Error('Password must be at least 8 characters')
+    }
+
+    const signUpParams = {
+      username: username.trim(),
       password: password,
       options: {
         userAttributes: {
-          email: email, // Email goes here in attributes
+          email: email.trim(),
         },
       },
-    })
-    console.log('Sign-up success:', { isSignUpComplete, userId, nextStep })
-    return { isSignUpComplete, userId, nextStep }
-  } catch (error) {
-    console.error('Error signing up:', error)
+    }
+    
+    console.log('SignUp params:', JSON.stringify(signUpParams, null, 2))
+    
+    const result = await signUp(signUpParams)
+    
+    console.log('SignUp result:', JSON.stringify(result, null, 2))
+    
+    return {
+      isSignUpComplete: result.isSignUpComplete,
+      userId: result.userId,
+      nextStep: result.nextStep
+    }
+  } catch (error: any) {
+    console.error('=== REGISTRATION ERROR ===')
+    console.error('Error name:', error.name)
+    console.error('Error message:', error.message)
+    console.error('Full error:', error)
+    
+    // Re-throw with more specific error messages
+    if (error.name === 'InvalidParameterException') {
+      if (error.message.includes('username')) {
+        throw new Error('Username format is invalid. Use only letters, numbers, and underscores.')
+      } else if (error.message.includes('email')) {
+        throw new Error('Email format is invalid.')
+      } else if (error.message.includes('password')) {
+        throw new Error('Password does not meet requirements.')
+      }
+    }
+    
     throw error
   }
 }
@@ -49,10 +96,15 @@ export async function register(username: string, password: string, email: string
 // Confirm Sign Up (for email verification)
 export async function confirmSignUpCode(username: string, code: string): Promise<any> {
   try {
+    console.log('=== CONFIRMATION DEBUG ===')
+    console.log('Username:', username)
+    console.log('Code:', code)
+    
     const { isSignUpComplete, nextStep } = await confirmSignUp({
-      username, // Use the same username (not email) that was used during signup
-      confirmationCode: code,
+      username: username.trim(),
+      confirmationCode: code.trim(),
     })
+    
     console.log('Confirmation success:', { isSignUpComplete, nextStep })
     return { isSignUpComplete, nextStep }
   } catch (error) {
@@ -65,7 +117,7 @@ export async function confirmSignUpCode(username: string, code: string): Promise
 export async function resendConfirmationCode(username: string): Promise<any> {
   try {
     const { destination, deliveryMedium } = await resendSignUpCode({
-      username, // Use the same username (not email) that was used during signup
+      username: username.trim(),
     })
     console.log('Confirmation code resent:', { destination, deliveryMedium })
     return { destination, deliveryMedium }
@@ -79,7 +131,7 @@ export async function resendConfirmationCode(username: string): Promise<any> {
 export async function login(username: string, password: string): Promise<AuthUser> {
   try {
     const { isSignedIn, nextStep } = await signIn({
-      username, // This can be username or email depending on your Cognito setup
+      username: username.trim(),
       password,
     })
     
@@ -139,7 +191,7 @@ export async function logout(): Promise<void> {
 // Forgot Password
 export async function forgotPassword(username: string): Promise<any> {
   try {
-    const output = await resetPassword({ username })
+    const output = await resetPassword({ username: username.trim() })
     console.log('Forgot password initiated:', output)
     return output
   } catch (error) {
@@ -152,8 +204,8 @@ export async function forgotPassword(username: string): Promise<any> {
 export async function forgotPasswordSubmit(username: string, code: string, newPassword: string): Promise<any> {
   try {
     await confirmResetPassword({
-      username,
-      confirmationCode: code,
+      username: username.trim(),
+      confirmationCode: code.trim(),
       newPassword,
     })
     console.log('Password reset success')

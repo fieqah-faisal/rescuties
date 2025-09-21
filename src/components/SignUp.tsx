@@ -29,6 +29,9 @@ const SignUp = () => {
   }
 
   const validateForm = () => {
+    console.log('=== FORM VALIDATION ===')
+    console.log('Form data:', formData)
+    
     if (!formData.username.trim()) {
       setError('Username is required')
       return false
@@ -40,9 +43,16 @@ const SignUp = () => {
       return false
     }
     
-    // Username should be at least 3 characters
+    // Username should be at least 3 characters and only contain valid characters
     if (formData.username.length < 3) {
       setError('Username must be at least 3 characters long')
+      return false
+    }
+    
+    // Check for valid username characters (letters, numbers, underscores only)
+    const usernameRegex = /^[a-zA-Z0-9_]+$/
+    if (!usernameRegex.test(formData.username)) {
+      setError('Username can only contain letters, numbers, and underscores')
       return false
     }
     
@@ -63,11 +73,23 @@ const SignUp = () => {
       return false
     }
     
+    // Check password complexity
+    const hasUpperCase = /[A-Z]/.test(formData.password)
+    const hasLowerCase = /[a-z]/.test(formData.password)
+    const hasNumbers = /\d/.test(formData.password)
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
+      setError('Password must contain uppercase, lowercase, numbers, and special characters')
+      return false
+    }
+    
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match')
       return false
     }
     
+    console.log('Form validation passed')
     return true
   }
 
@@ -77,38 +99,45 @@ const SignUp = () => {
     setError('')
     setSuccess('')
     
+    console.log('=== SIGNUP ATTEMPT ===')
+    console.log('Starting signup process...')
+    
     if (!validateForm()) {
       setIsLoading(false)
       return
     }
 
     try {
-      // Pass username and email separately - username cannot be email format
+      console.log('Calling register function...')
       const result = await register(formData.username, formData.password, formData.email)
+      console.log('Register result:', result)
+      
       if (result.nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
         setSuccess('Account created successfully! Please check your email for verification code.')
         setShowConfirmation(true)
+      } else {
+        console.log('Unexpected signup step:', result.nextStep)
+        setError('Unexpected response from server. Please try again.')
       }
     } catch (error: any) {
-      console.error('Sign up error:', error)
+      console.error('=== SIGNUP ERROR IN COMPONENT ===')
+      console.error('Error object:', error)
+      console.error('Error name:', error.name)
+      console.error('Error message:', error.message)
       
-      // Handle specific Cognito errors
+      // Handle specific Cognito errors with better messages
       if (error.name === 'UsernameExistsException') {
         setError('An account with this username already exists. Please choose a different username.')
       } else if (error.name === 'InvalidPasswordException') {
         setError('Password does not meet requirements. Please use at least 8 characters with uppercase, lowercase, numbers, and special characters.')
       } else if (error.name === 'InvalidParameterException') {
-        if (error.message.includes('email')) {
-          setError('Invalid email format. Please enter a valid email address.')
-        } else if (error.message.includes('username')) {
-          setError('Invalid username format. Username cannot be an email address.')
-        } else {
-          setError('Invalid input. Please check your information and try again.')
-        }
+        setError(`Invalid input: ${error.message}`)
       } else if (error.name === 'AliasExistsException') {
         setError('An account with this email already exists. Please use a different email or try signing in.')
+      } else if (error.message) {
+        setError(error.message)
       } else {
-        setError(error.message || 'An error occurred during registration. Please try again.')
+        setError('An unexpected error occurred during registration. Please check the console for details.')
       }
     } finally {
       setIsLoading(false)
@@ -324,6 +353,17 @@ const SignUp = () => {
             </div>
           )}
 
+          {/* Debug Info */}
+          <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+            <div className="text-blue-400 text-xs">
+              <p><strong>Debug Info:</strong></p>
+              <p>Username: {formData.username || 'empty'}</p>
+              <p>Email: {formData.email || 'empty'}</p>
+              <p>Password length: {formData.password.length}</p>
+              <p>Check browser console for detailed logs</p>
+            </div>
+          </div>
+
           {/* Sign Up Form */}
           <form onSubmit={handleSignUp} className="space-y-6">
             {/* Username Field */}
@@ -339,13 +379,13 @@ const SignUp = () => {
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  placeholder="Choose a unique username"
+                  placeholder="rescuer123"
                   required
                   disabled={isLoading}
                 />
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Must be at least 3 characters, cannot be an email address
+                Letters, numbers, and underscores only. No @ symbol.
               </p>
             </div>
 
@@ -362,7 +402,7 @@ const SignUp = () => {
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  placeholder="Enter your email address"
+                  placeholder="your.email@example.com"
                   required
                   disabled={isLoading}
                 />
@@ -385,7 +425,7 @@ const SignUp = () => {
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
                   className="w-full pl-10 pr-12 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                  placeholder="Create a strong password"
+                  placeholder="SecurePass123!"
                   required
                   disabled={isLoading}
                 />
@@ -399,7 +439,7 @@ const SignUp = () => {
                 </button>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                At least 8 characters with uppercase, lowercase, numbers, and special characters
+                Must include: uppercase, lowercase, numbers, and special characters
               </p>
             </div>
 
