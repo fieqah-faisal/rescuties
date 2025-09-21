@@ -9,8 +9,8 @@ const amplifyConfig = {
   Auth: {
     Cognito: {
       region: 'us-east-1', // Replace with your region
-      userPoolId: 'us-east-1_XXXXXXXXX', // Replace with your User Pool ID
-      userPoolClientId: 'XXXXXXXXXXXXXXXXXXXXXXXXXX', // Replace with your App Client ID
+      userPoolId: 'us-east-1_mQXE1rNhN', // Replace with your User Pool ID
+      userPoolClientId: '48j09hosl96q625062096lasco', // Replace with your App Client ID
       loginWith: {
         email: true,
       },
