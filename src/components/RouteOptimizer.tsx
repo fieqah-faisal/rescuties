@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Map, Navigation, Clock, Fuel, AlertTriangle, Route, MapPin, Zap, Search, X, Navigation2 } from 'lucide-react'
+import { Map, Navigation, Clock, Fuel, AlertTriangle, MapPin, Zap, Search, X, Navigation2, GitBranch } from 'lucide-react'
 import { googleMapsService, PlaceResult, RouteResult } from '../utils/googleMaps'
 import GoogleMap from './GoogleMap'
 
@@ -270,7 +270,7 @@ const RouteOptimizer = () => {
                   disabled={loading || !startingPoint || !destination}
                   className="btn-primary w-full py-3 rounded-lg flex items-center justify-center space-x-2 hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Route className="h-5 w-5" />
+                  <GitBranch className="h-5 w-5" />
                   <span>{loading ? 'Calculating...' : 'Calculate Optimal Routes'}</span>
                 </button>
               </div>

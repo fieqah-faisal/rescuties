@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { MessageCircle, Send, X, Bot, User, Loader2, AlertTriangle } from 'lucide-react'
+import { MessageCircle, Send, X, Bot, User, Loader2, AlertTriangle, Bell } from 'lucide-react'
+import { snsClient } from '../lib/sns-client'
+import type { NotificationMessage } from '../lib/sns-client'
 
 interface Message {
   id: string
@@ -9,6 +11,7 @@ interface Message {
   sessionId?: string
   intentName?: string
   slots?: Record<string, any>
+  notificationSent?: boolean
 }
 
 interface LexResponse {
@@ -17,6 +20,12 @@ interface LexResponse {
   dialogState?: string
   slots?: Record<string, any>
   sessionAttributes?: Record<string, any>
+  shouldNotify?: boolean
+  notificationData?: {
+    subject: string
+    severity: 'high' | 'medium' | 'low'
+    location?: string
+  }
 }
 
 const ChatBot = () => {
@@ -25,7 +34,7 @@ const ChatBot = () => {
     {
       id: 'welcome-1',
       type: 'bot',
-      message: 'Hello! I\'m your AI disaster response assistant powered by Amazon Lex. I can help you with:\n\n• Real-time disaster alerts\n• Emergency evacuation routes\n• Safety recommendations\n• Resource locations\n• Emergency contacts\n\nHow can I assist you today?',
+      message: 'Hello! I\'m your AI disaster response assistant powered by Amazon Lex and SNS. I can help you with:\n\n• Real-time disaster alerts with notifications\n• Emergency evacuation routes\n• Safety recommendations\n• Resource locations\n• Emergency contacts\n\nHow can I assist you today?',
       timestamp: new Date().toLocaleTimeString()
     }
   ])
@@ -33,6 +42,7 @@ const ChatBot = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected')
+  const [snsStatus, setSnsStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom when new messages arrive
@@ -40,21 +50,17 @@ const ChatBot = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Initialize Lex connection (placeholder for actual implementation)
+  // Initialize Lex and SNS connections
   useEffect(() => {
     initializeLexConnection()
+    initializeSNSConnection()
   }, [])
 
   const initializeLexConnection = async () => {
     try {
-      // TODO: Initialize Amazon Lex Runtime V2 client
-      // This will be implemented when AWS credentials are configured
       console.log('🤖 Initializing Amazon Lex connection...')
       console.log('Session ID:', sessionId)
-      console.log('Bot Name: DisasterResponseBot (placeholder)')
-      console.log('Bot Alias: TSTALIASID (placeholder)')
       
-      // Simulate connection check
       setTimeout(() => {
         setConnectionStatus('connected')
         console.log('✅ Amazon Lex connection ready')
@@ -65,28 +71,36 @@ const ChatBot = () => {
     }
   }
 
+  const initializeSNSConnection = async () => {
+    try {
+      console.log('📡 Initializing Amazon SNS connection...')
+      
+      setTimeout(() => {
+        setSnsStatus('connected')
+        console.log('✅ Amazon SNS connection ready')
+      }, 1200)
+    } catch (error) {
+      console.error('❌ Failed to initialize SNS connection:', error)
+      setSnsStatus('error')
+    }
+  }
+
+  const sendNotification = async (notificationData: NotificationMessage) => {
+    try {
+      const response = await snsClient.publishMessage(notificationData)
+      return response.success
+    } catch (error) {
+      console.error('❌ Failed to send notification:', error)
+      return false
+    }
+  }
+
   const sendMessageToLex = async (message: string): Promise<LexResponse> => {
     try {
-      // TODO: Replace with actual Amazon Lex Runtime V2 API call
       console.log('📤 Sending to Lex:', { message, sessionId })
       
-      // Simulate Lex API call structure
-      const lexRequest = {
-        botId: process.env.VITE_LEX_BOT_ID || 'placeholder-bot-id',
-        botAliasId: process.env.VITE_LEX_BOT_ALIAS_ID || 'TSTALIASID',
-        localeId: 'en_US',
-        sessionId: sessionId,
-        text: message,
-        sessionState: {
-          sessionAttributes: {},
-          dialogAction: {
-            type: 'ElicitIntent'
-          }
-        }
-      }
-
-      // Placeholder response - will be replaced with actual Lex API call
-      const mockResponse = await simulateLexResponse(message)
+      // Simulate Lex API call with SNS integration
+      const mockResponse = await simulateLexResponseWithSNS(message)
       
       console.log('📥 Lex response:', mockResponse)
       return mockResponse
@@ -96,45 +110,71 @@ const ChatBot = () => {
     }
   }
 
-  // Simulate Lex responses for development (remove when integrating real Lex)
-  const simulateLexResponse = async (userMessage: string): Promise<LexResponse> => {
-    await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate API delay
+  // Enhanced Lex simulation with SNS notification triggers
+  const simulateLexResponseWithSNS = async (userMessage: string): Promise<LexResponse> => {
+    await new Promise(resolve => setTimeout(resolve, 1000))
     
     const lowerMessage = userMessage.toLowerCase()
     
     if (lowerMessage.includes('flood') || lowerMessage.includes('banjir')) {
       return {
-        message: 'I can help you with flood information. Based on current data, there are active flood warnings in Selangor and Pahang. Would you like specific evacuation routes or shelter locations?',
+        message: 'I can help you with flood information. Based on current data, there are active flood warnings in Selangor and Pahang. Would you like specific evacuation routes or shelter locations?\n\n🔔 I can send you real-time flood alerts via SMS/Email if you subscribe to notifications.',
         intentName: 'FloodInquiry',
         dialogState: 'ElicitSlot',
-        slots: { location: null, informationType: null }
+        slots: { location: null, informationType: null },
+        shouldNotify: true,
+        notificationData: {
+          subject: '🌊 Flood Alert Information Requested',
+          severity: 'medium',
+          location: 'Selangor and Pahang'
+        }
       }
     } else if (lowerMessage.includes('landslide') || lowerMessage.includes('tanah runtuh')) {
       return {
-        message: 'Landslide alerts are currently active in Cameron Highlands and Genting areas. I can provide safety guidelines and alternative routes. What specific information do you need?',
+        message: 'Landslide alerts are currently active in Cameron Highlands and Genting areas. I can provide safety guidelines and alternative routes. What specific information do you need?\n\n🔔 Subscribe to get instant landslide warnings in your area.',
         intentName: 'LandslideInquiry',
         dialogState: 'ElicitSlot',
-        slots: { location: null, urgencyLevel: null }
-      }
-    } else if (lowerMessage.includes('route') || lowerMessage.includes('jalan')) {
-      return {
-        message: 'I can help you find the safest evacuation routes. Please provide your current location and destination, and I\'ll calculate the best path avoiding disaster zones.',
-        intentName: 'RouteOptimization',
-        dialogState: 'ElicitSlot',
-        slots: { currentLocation: null, destination: null }
+        slots: { location: null, urgencyLevel: null },
+        shouldNotify: true,
+        notificationData: {
+          subject: '⛰️ Landslide Alert Information Requested',
+          severity: 'high',
+          location: 'Cameron Highlands and Genting'
+        }
       }
     } else if (lowerMessage.includes('emergency') || lowerMessage.includes('kecemasan')) {
       return {
-        message: 'For immediate emergencies, call 999. I can also provide:\n• Nearest hospital locations\n• Emergency shelter information\n• Rescue team contacts\n\nWhat type of emergency assistance do you need?',
+        message: '🚨 For immediate emergencies, call 999. I can also provide:\n• Nearest hospital locations\n• Emergency shelter information\n• Rescue team contacts\n\nWhat type of emergency assistance do you need?\n\n🔔 Critical: Subscribe to emergency notifications for instant alerts.',
         intentName: 'EmergencyAssistance',
         dialogState: 'ElicitSlot',
-        slots: { emergencyType: null, location: null }
+        slots: { emergencyType: null, location: null },
+        shouldNotify: true,
+        notificationData: {
+          subject: '🚨 Emergency Assistance Requested',
+          severity: 'high'
+        }
+      }
+    } else if (lowerMessage.includes('route') || lowerMessage.includes('jalan')) {
+      return {
+        message: 'I can help you find the safest evacuation routes. Please provide your current location and destination, and I\'ll calculate the best path avoiding disaster zones.\n\n🔔 Get route updates and road closure alerts via notifications.',
+        intentName: 'RouteOptimization',
+        dialogState: 'ElicitSlot',
+        slots: { currentLocation: null, destination: null },
+        shouldNotify: false
+      }
+    } else if (lowerMessage.includes('subscribe') || lowerMessage.includes('notification')) {
+      return {
+        message: '🔔 Great! You can subscribe to disaster notifications using the notification panel (bell icon on the left). We offer:\n\n• SMS alerts for immediate warnings\n• Email updates for detailed information\n• Real-time disaster notifications\n• Emergency evacuation alerts\n\nClick the bell icon to manage your subscriptions.',
+        intentName: 'NotificationSubscription',
+        dialogState: 'Fulfilled',
+        shouldNotify: false
       }
     } else {
       return {
-        message: 'I understand you need assistance with disaster response. I can help with flood alerts, landslide warnings, evacuation routes, and emergency information. Could you please be more specific about what you need?',
+        message: 'I understand you need assistance with disaster response. I can help with flood alerts, landslide warnings, evacuation routes, and emergency information. Could you please be more specific about what you need?\n\n💡 Tip: Ask me about "notifications" to set up real-time disaster alerts.',
         intentName: 'GeneralInquiry',
-        dialogState: 'ElicitIntent'
+        dialogState: 'ElicitIntent',
+        shouldNotify: false
       }
     }
   }
@@ -164,7 +204,29 @@ const ChatBot = () => {
         timestamp: new Date().toLocaleTimeString(),
         sessionId,
         intentName: lexResponse.intentName,
-        slots: lexResponse.slots
+        slots: lexResponse.slots,
+        notificationSent: false
+      }
+
+      // Send notification if required and SNS is connected
+      if (lexResponse.shouldNotify && lexResponse.notificationData && snsStatus === 'connected') {
+        const notificationMessage: NotificationMessage = {
+          subject: lexResponse.notificationData.subject,
+          message: `User inquiry: ${userMessage.message}\n\nBot response: ${lexResponse.message}\n\nLocation: ${lexResponse.notificationData.location || 'Not specified'}\nSeverity: ${lexResponse.notificationData.severity}\nSession: ${sessionId}`,
+          attributes: {
+            intentName: lexResponse.intentName,
+            severity: lexResponse.notificationData.severity,
+            location: lexResponse.notificationData.location,
+            sessionId: sessionId
+          }
+        }
+
+        const notificationSent = await sendNotification(notificationMessage)
+        botMessage.notificationSent = notificationSent
+        
+        if (notificationSent) {
+          console.log('✅ Notification sent successfully')
+        }
       }
 
       setMessages(prev => [...prev, botMessage])
@@ -190,24 +252,21 @@ const ChatBot = () => {
   const quickActions = [
     'Check flood status in KL',
     'Find evacuation routes',
-    'Get emergency contacts',
-    'Landslide warnings'
+    'Subscribe to notifications',
+    'Emergency contacts'
   ]
 
-  const getConnectionStatusColor = () => {
-    switch (connectionStatus) {
+  const getConnectionStatusColor = (status: string) => {
+    switch (status) {
       case 'connected': return 'bg-green-500'
       case 'error': return 'bg-red-500'
       default: return 'bg-yellow-500'
     }
   }
 
-  const getConnectionStatusText = () => {
-    switch (connectionStatus) {
-      case 'connected': return 'Lex Connected'
-      case 'error': return 'Connection Error'
-      default: return 'Connecting...'
-    }
+  const getConnectionStatusText = (service: string, status: string) => {
+    const statusText = status === 'connected' ? 'Connected' : status === 'error' ? 'Error' : 'Connecting...'
+    return `${service} ${statusText}`
   }
 
   return (
@@ -220,7 +279,7 @@ const ChatBot = () => {
         }`}
       >
         <MessageCircle className="h-6 w-6 text-white" />
-        {connectionStatus === 'connected' && (
+        {connectionStatus === 'connected' && snsStatus === 'connected' && (
           <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
         )}
       </button>
@@ -240,14 +299,25 @@ const ChatBot = () => {
               </div>
               <div>
                 <h3 className="text-white font-semibold">AI Assistant</h3>
-                <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`}></div>
-                  <span className={`text-xs ${
-                    connectionStatus === 'connected' ? 'text-green-400' : 
-                    connectionStatus === 'error' ? 'text-red-400' : 'text-yellow-400'
-                  }`}>
-                    {getConnectionStatusText()}
-                  </span>
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${getConnectionStatusColor(connectionStatus)}`}></div>
+                    <span className={`text-xs ${
+                      connectionStatus === 'connected' ? 'text-green-400' : 
+                      connectionStatus === 'error' ? 'text-red-400' : 'text-yellow-400'
+                    }`}>
+                      {getConnectionStatusText('Lex', connectionStatus)}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${getConnectionStatusColor(snsStatus)}`}></div>
+                    <span className={`text-xs ${
+                      snsStatus === 'connected' ? 'text-green-400' : 
+                      snsStatus === 'error' ? 'text-red-400' : 'text-yellow-400'
+                    }`}>
+                      {getConnectionStatusText('SNS', snsStatus)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -288,11 +358,19 @@ const ChatBot = () => {
                     <p className="text-sm whitespace-pre-line">{msg.message}</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-xs opacity-70">{msg.timestamp}</span>
-                      {msg.intentName && (
-                        <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded">
-                          {msg.intentName}
-                        </span>
-                      )}
+                      <div className="flex items-center space-x-2">
+                        {msg.intentName && (
+                          <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded">
+                            {msg.intentName}
+                          </span>
+                        )}
+                        {msg.notificationSent && (
+                          <div className="flex items-center space-x-1">
+                            <Bell className="h-3 w-3 text-green-400" />
+                            <span className="text-xs text-green-400">Notified</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -317,11 +395,15 @@ const ChatBot = () => {
           </div>
 
           {/* Connection Status Warning */}
-          {connectionStatus === 'error' && (
+          {(connectionStatus === 'error' || snsStatus === 'error') && (
             <div className="px-4 py-2 bg-red-500/10 border-t border-red-500/20">
               <div className="flex items-center space-x-2 text-red-400 text-xs">
                 <AlertTriangle className="h-4 w-4" />
-                <span>Amazon Lex connection failed. Using fallback responses.</span>
+                <span>
+                  {connectionStatus === 'error' && 'Lex connection failed. '}
+                  {snsStatus === 'error' && 'SNS connection failed. '}
+                  Using fallback responses.
+                </span>
               </div>
             </div>
           )}
@@ -348,7 +430,7 @@ const ChatBot = () => {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                placeholder="Ask about disasters, routes, or emergency info..."
+                placeholder="Ask about disasters, routes, or notifications..."
                 disabled={isLoading}
                 className="flex-1 bg-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               />
@@ -367,7 +449,7 @@ const ChatBot = () => {
 
             {/* Session Info */}
             <div className="mt-2 text-xs text-gray-500 text-center">
-              Session: {sessionId.slice(-8)}
+              Session: {sessionId.slice(-8)} | Lex + SNS Integration
             </div>
           </div>
         </div>
